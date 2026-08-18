@@ -1,0 +1,1155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>The Connected Universe — Marvel Card Deck</title>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  html, body { margin: 0; padding: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/plain" id="app-source">
+
+const { useState, useMemo, useRef, useEffect, useCallback } = React;
+
+function Icon({ children, size = 24, strokeWidth = 2, style, className }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" style={style} className={className}>
+      {children}
+    </svg>
+  );
+}
+const Search = (p) => <Icon {...p}><circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Icon>;
+const Network = (p) => <Icon {...p}><circle cx="12" cy="5" r="2.3" /><circle cx="5" cy="19" r="2.3" /><circle cx="19" cy="19" r="2.3" /><line x1="12" y1="7.3" x2="6.3" y2="17" /><line x1="12" y1="7.3" x2="17.7" y2="17" /></Icon>;
+const LayoutGrid = (p) => <Icon {...p}><rect x="3" y="3" width="7" height="7" rx="1" /><rect x="14" y="3" width="7" height="7" rx="1" /><rect x="3" y="14" width="7" height="7" rx="1" /><rect x="14" y="14" width="7" height="7" rx="1" /></Icon>;
+const X = (p) => <Icon {...p}><line x1="5" y1="5" x2="19" y2="19" /><line x1="19" y1="5" x2="5" y2="19" /></Icon>;
+const Shield = (p) => <Icon {...p}><path d="M12 3l7 3v6c0 5-3.5 7.5-7 9-3.5-1.5-7-4-7-9V6l7-3z" /></Icon>;
+const Skull = (p) => <Icon {...p}><circle cx="12" cy="10" r="7" /><circle cx="9" cy="9.5" r="1.3" fill="currentColor" stroke="none" /><circle cx="15" cy="9.5" r="1.3" fill="currentColor" stroke="none" /><path d="M9 17v2M12 17.5v2.5M15 17v2" /></Icon>;
+const Zap = (p) => <Icon {...p}><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8z" /></Icon>;
+const ZoomIn = (p) => <Icon {...p}><circle cx="11" cy="11" r="7" /><line x1="11" y1="8" x2="11" y2="14" /><line x1="8" y1="11" x2="14" y2="11" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Icon>;
+const ZoomOut = (p) => <Icon {...p}><circle cx="11" cy="11" r="7" /><line x1="8" y1="11" x2="14" y2="11" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></Icon>;
+const Maximize2 = (p) => <Icon {...p}><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" y1="3" x2="14" y2="10" /><line x1="3" y1="21" x2="10" y2="14" /></Icon>;
+const Film = (p) => <Icon {...p}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="7" y1="3" x2="7" y2="21" /><line x1="17" y1="3" x2="17" y2="21" /><line x1="3" y1="8" x2="7" y2="8" /><line x1="3" y1="16" x2="7" y2="16" /><line x1="17" y1="8" x2="21" y2="8" /><line x1="17" y1="16" x2="21" y2="16" /></Icon>;
+
+// ---------------------------------------------------------------------------
+// DATA — hand-written summaries (not copied from any source), for prototype use.
+// Screen-history figures (film counts, actors) are approximate and meant as
+// fun trivia, not a precise reference.
+// ---------------------------------------------------------------------------
+
+const TEAMS = {
+  Avengers: { color: "#3B5FE0", ink: "#1B2C6B" },
+  "X-Men": { color: "#F0B429", ink: "#7A4E00" },
+  Brotherhood: { color: "#B45309", ink: "#5C2A03" },
+  Guardians: { color: "#8B5CF6", ink: "#3E1F87" },
+  Asgard: { color: "#10B981", ink: "#065F46" },
+  Villains: { color: "#DC2626", ink: "#5B0B0B" },
+  "Fantastic Four": { color: "#F97316", ink: "#7C2D12" },
+  Wakanda: { color: "#6D28D9", ink: "#2E1065" },
+  Cosmic: { color: "#0891B2", ink: "#164E63" },
+  "Street-Level": { color: "#475569", ink: "#1E293B" },
+  "S.H.I.E.L.D.": { color: "#1E3A5F", ink: "#0B1B2E" },
+  "New Blood": { color: "#DB2777", ink: "#831843" },
+};
+
+const ALIGN_ICON = { hero: Shield, antihero: Zap, villain: Skull };
+
+const CHARACTERS = [
+  { id: "ironman", name: "Iron Man", real: "Tony Stark", team: "Avengers", alignment: "hero",
+    powers: ["Powered armor", "Genius engineer", "Repulsors"],
+    bio: "Billionaire industrialist who builds a suit of armor to survive, then keeps building better ones to protect the world.",
+    extra: "Founded the Avengers and bankrolled most of their early tech out of his own pocket.",
+    fullBio: "Tony Stark grew up as the brilliant but reckless heir to his father's weapons manufacturing empire. He built a reputation as a genius engineer long before he ever became a hero. Everything changed when he was captured overseas and forced to build a weapon for his captors. Instead, he built a suit of armor and escaped, and the experience convinced him to shut down his company's weapons division. He kept refining that armor obsessively, cycling through dozens of increasingly advanced models over the years. Founding the Avengers gave him a way to use his resources for something bigger than himself. His ego and control issues have caused as many problems as his intelligence has solved, especially when he tried to build Ultron to protect the world. He has clashed hard with teammates like Captain America over how much oversight heroes should accept. Underneath the bravado, he carries real guilt over the harm his weapons once caused before he reformed. Fatherhood eventually softened some of his sharper edges without dulling his drive to build. He ultimately gave everything he had, literally, to stop Thanos and save the universe.",
+    first: "Tales of Suspense #39 (1963)", screen: { films: 10, actors: ["Robert Downey Jr."] } },
+  { id: "cap", name: "Captain America", real: "Steve Rogers", team: "Avengers", alignment: "hero",
+    powers: ["Peak human physique", "Vibranium shield", "Tactics"],
+    bio: "A super-soldier from WWII, defined less by strength than by refusing to compromise on what's right.",
+    extra: "Frozen in ice for decades, he woke up years out of time and never lost his sense of direction.",
+    fullBio: "Steve Rogers was a scrawny kid from Brooklyn who kept trying to enlist despite failing his physical again and again. The U.S. Army finally accepted him into an experimental super-soldier program during World War II. The serum gave him peak human strength and speed, but his sense of duty was there long before the transformation. He spent the war leading a commando unit and became a symbol for people back home. A crashed plane left him frozen in ice for nearly seventy years while the world moved on without him. Waking up decades later, he had to rebuild a sense of who he was in a changed world. He became the moral center of the Avengers almost by default, since everyone else kept looking to him. His closest bond is with Bucky Barnes, a friendship that survived brainwashing, war, and decades apart. He clashed bitterly with Tony Stark over how much oversight superheroes should accept from governments. Eventually he chose to step back and hand the shield to someone he trusted completely.",
+    first: "Captain America Comics #1 (1941)", screen: { films: 9, actors: ["Chris Evans", "Anthony Mackie (as the new Captain America)"] } },
+  { id: "thor", name: "Thor", real: "Thor Odinson", team: "Avengers", alignment: "hero",
+    powers: ["Godly strength", "Storm control", "Mjolnir"],
+    bio: "Asgardian god of thunder, exiled to Earth to learn humility before earning his hammer back.",
+    extra: "Learned that being worthy has less to do with strength and more with who he chooses to protect.",
+    fullBio: "Thor grew up as the brash, battle-hungry heir to the Asgardian throne, more interested in glory than wisdom. Odin banished him to Earth without his powers to teach him a lesson in humility. Losing everything, even briefly, forced him to learn what it actually meant to be worthy of his hammer. Loki's manipulations and betrayals have shaped much of his life, since the two were raised as brothers. He lost his hammer, his home, and most of his people to threats he couldn't always stop in time. Ragnarok cost him Asgard itself, and he chose to lead its survivors toward a new life. Losing to Thanos, even after everything, left him with guilt he carried for years afterward. He eventually let go of his old warhammer entirely and embraced a stormbreaker axe instead. Grief and depression hit him harder than any physical enemy ever has. Through it all, he keeps choosing to protect the people around him, even when he doubts himself.",
+    first: "Journey Into Mystery #83 (1962)", screen: { films: 8, actors: ["Chris Hemsworth"] } },
+  { id: "blackwidow", name: "Black Widow", real: "Natasha Romanoff", team: "Avengers", alignment: "hero",
+    powers: ["Elite espionage", "Martial arts", "Tactical skill"],
+    bio: "A reformed spy who turns a lifetime of training against the people who trained her.",
+    extra: "Trained from childhood in the Red Room, she spent her adult life trying to balance the ledger.",
+    fullBio: "Natasha Romanoff was trained from childhood in the Red Room, a program built to create perfect assassins. She has no reliable memory of her life before that training began. Years working as a spy and assassin left her with a long list of things she wanted to atone for. S.H.I.E.L.D. eventually recruited her, giving her a chance to redirect her skills toward something she could live with. She became one of the Avengers' most consistently capable members, without any powers beyond her own training. Her past kept resurfacing, from the Red Room's other graduates to enemies who remembered exactly who she used to be. She formed a close, quiet partnership with Hawkeye that went back years before the Avengers existed. Protecting a family of fellow Red Room escapees eventually mattered to her as much as any mission. She sacrificed herself to help retrieve an Infinity Stone, choosing to save someone she loved. Her death became one of the turning points that let the Avengers finally undo Thanos's snap.",
+    first: "Tales of Suspense #52 (1964)", screen: { films: 8, actors: ["Scarlett Johansson"] } },
+  { id: "hawkeye", name: "Hawkeye", real: "Clint Barton", team: "Avengers", alignment: "hero",
+    powers: ["Master archer", "Trick arrows", "Precision"],
+    bio: "A former circus sharpshooter who never misses, even without a drop of super-power in him.",
+    extra: "A family man off the clock, and the Avengers' quietest, most consistently lethal member on it.",
+    fullBio: "Clint Barton grew up in a circus before a life of crime nearly got him killed. S.H.I.E.L.D. recruited him after he chose not to take a shot he was hired to take. He built a reputation as the most precise marksman in the organization, without a single super power to his name. Keeping his family a secret for years let him protect them from the dangers of his work. Losing people close to him during the fight against Thanos pushed him into a darker, more brutal chapter. He briefly became a vigilante willing to kill in ways the old Hawkeye never would have. Reconnecting with a new protégé eventually helped pull him back from that edge. He's mentored more than one young archer, treating them less like students and more like family. Despite constantly being underestimated next to gods and billionaires, he's saved the team as often as anyone. He always insists he's just a guy with a bow, and somehow that keeps being enough.",
+    first: "Tales of Suspense #57 (1964)", screen: { films: 6, actors: ["Jeremy Renner"] } },
+  { id: "hulk", name: "Hulk", real: "Bruce Banner", team: "Avengers", alignment: "antihero",
+    powers: ["Unlimited strength", "Regeneration", "Rage-fueled power"],
+    bio: "A brilliant physicist whose gamma-radiation accident left him sharing his body with an unstoppable rage monster.",
+    extra: "Years of trying to suppress the Hulk eventually gave way to Bruce learning to merge with him instead.",
+    fullBio: "Bruce Banner was a brilliant gamma radiation researcher until an experiment went catastrophically wrong. The accident left him sharing his body with an enormous, uncontrollable green alter ego. For years he ran from the military and from himself, terrified of what the Hulk might do. Every spike of anger risked a transformation he couldn't fully control or predict. Working with the Avengers gave the Hulk something rare: people worth protecting instead of fighting. He spent years trying to keep Hulk locked away, treating the transformation as a curse rather than a part of himself. A long exile among gladiators taught him that the Hulk didn't have to be something to suppress. Eventually he found a way to merge his own intelligence with the Hulk's strength permanently. That fusion let him keep his personality even while enormous and green. He's since become as valuable for his scientific mind as for his ability to smash.",
+    first: "The Incredible Hulk #1 (1962)", screen: { films: 6, actors: ["Eric Bana", "Edward Norton", "Mark Ruffalo"] } },
+  { id: "spiderman", name: "Spider-Man", real: "Peter Parker", team: "Avengers", alignment: "hero",
+    powers: ["Wall-crawling", "Spider-sense", "Web-shooters"],
+    bio: "A science-nerd teenager bitten by a radioactive spider, forever learning that power demands responsibility.",
+    extra: "Balances homework, a part-time job, and a secret identity — usually not very well.",
+    fullBio: "Peter Parker was an ordinary science-nerd teenager living with his Aunt May and Uncle Ben. A field trip bite from a radioactive spider gave him strength, agility, and a strange prickling sense of danger. He initially used his new powers selfishly, which indirectly led to his uncle's death. That loss taught him the lesson that has defined him ever since: power demands responsibility. He built his own web-shooters rather than relying on any inherited fortune or technology. Balancing homework, a part-time job, and a secret identity has never come easily to him. He's lost mentors, love interests, and friends, and each loss has only deepened his sense of duty. Different versions of him have existed across timelines, but the core instinct to help people stays the same. He's often the youngest hero in any room, and treated that way more often than he'd like. Despite everything, he keeps choosing to be Spider-Man even when it costs him almost everything else.",
+    first: "Amazing Fantasy #15 (1962)", screen: { films: 12, actors: ["Tobey Maguire", "Andrew Garfield", "Tom Holland"] } },
+  { id: "wolverine", name: "Wolverine", real: "James \"Logan\" Howlett", team: "X-Men", alignment: "antihero",
+    powers: ["Adamantium claws", "Healing factor", "Enhanced senses"],
+    bio: "A near-immortal loner with a violent past, who keeps choosing to fight for people anyway.",
+    extra: "Spent decades with no memory of his own past, piecing together who he was one flashback at a time.",
+    fullBio: "Logan lived for well over a century without any clear memory of who he used to be. His healing factor let him survive wars, experiments, and injuries that would have killed anyone else. The Weapon X program bonded adamantium to his skeleton and claws, turning him into a living weapon. For years he wandered from conflict to conflict, using violence as a way to avoid facing himself. Joining the X-Men gave him something closer to a purpose than he'd had in decades. He formed an unlikely found family there, especially with younger mutants he felt protective of. His romantic history with Jean Grey shaped much of his early time with the team. Regaining fragments of his lost memories only made his past more painful, not less confusing. He's fought alongside and against nearly every major mutant faction at different points. Underneath the claws and the temper, he's spent most of his life just trying to do right by people.",
+    first: "The Incredible Hulk #180 (1974)", screen: { films: 9, actors: ["Hugh Jackman"] } },
+  { id: "cyclops", name: "Cyclops", real: "Scott Summers", team: "X-Men", alignment: "hero",
+    powers: ["Optic energy blasts", "Battle tactics"],
+    bio: "The X-Men's disciplined field leader, holding the team together while holding back a power he can't fully control.",
+    extra: "Grew up in Professor Xavier's school and never really left, eventually leading the X-Men himself.",
+    fullBio: "Scott Summers lost his parents in a plane crash as a child and was raised in an orphanage before Professor Xavier found him. His optic blasts are so powerful he has to wear a special visor just to keep them under control. That constant self-restraint shaped him into someone disciplined almost to a fault. Xavier trained him to become the X-Men's first and most reliable field leader. He fell in love with Jean Grey early on, a relationship that would follow him for most of his life. Losing her, more than once, hit him harder than any battle ever did. Leading the X-Men meant constantly weighing tactics against the safety of people he cared about. He's often seen as cold or rigid, though much of that is just the discipline his powers demand. Over the years he's clashed with Xavier's methods and eventually charted a harder line of his own. Whatever the era, he's rarely been anything other than the team's anchor.",
+    first: "The X-Men #1 (1963)", screen: { films: 5, actors: ["James Marsden", "Tye Sheridan"] } },
+  { id: "jeangrey", name: "Jean Grey", real: "Jean Grey", team: "X-Men", alignment: "hero",
+    powers: ["Telepathy", "Telekinesis", "Phoenix Force"],
+    bio: "One of the X-Men's founding students, whose mental powers occasionally give way to something cosmic and uncontrollable.",
+    extra: "Her connection to the cosmic Phoenix Force has both saved and nearly destroyed the people she loves.",
+    fullBio: "Jean Grey discovered her telepathic and telekinetic powers as a child, after a traumatic accident awakened them early. Professor Xavier took her in as one of his very first students. She grew into one of the most powerful mutants alive, capable of both extraordinary healing and extraordinary destruction. Her connection to the cosmic Phoenix Force complicates nearly everything else about her life. When that power overwhelms her, the results have been catastrophic for people around her. She's died and returned more than once, each time changed by what the Phoenix left behind. Her relationship with Cyclops defined much of her adult life, on and off for years. She's just as often the one holding the X-Men together as the one putting them at risk. Balancing her own humanity against a near-godlike cosmic force is a struggle she's never fully resolved. Even her closest friends aren't always sure which version of Jean they're dealing with.",
+    first: "The X-Men #1 (1963)", screen: { films: 5, actors: ["Famke Janssen", "Sophie Turner"] } },
+  { id: "storm", name: "Storm", real: "Ororo Munroe", team: "X-Men", alignment: "hero",
+    powers: ["Weather control", "Flight"],
+    bio: "Once worshipped as a goddess in Africa, now a steady, weather-commanding pillar of the X-Men.",
+    extra: "Claustrophobia from a childhood tragedy is one of the few things her weather powers can't fix.",
+    fullBio: "Ororo Munroe was orphaned as a child in Cairo and grew up as a skilled thief on the streets. Her mutant power over the weather first emerged after years of hardship and grief. She traveled to Kenya, where local tribes came to revere her as something close to a goddess. Professor Xavier eventually recruited her, and she became one of the X-Men's most steady, respected leaders. A childhood trauma left her with a lasting fear of enclosed spaces, an unusual weakness for someone who can fly. She's led the X-Men more than once, valued as much for her calm judgment as her raw power. Her bond with Wolverine is one of quiet mutual respect built over decades of fighting side by side. She briefly ruled Wakanda alongside Black Panther during a period of marriage between the two of them. Even at her most powerful, she's remained deeply attached to the people she protects rather than the power itself. Few X-Men command as much instant trust from teammates as she does.",
+    first: "Giant-Size X-Men #1 (1975)", screen: { films: 6, actors: ["Halle Berry", "Alexandra Shipp"] } },
+  { id: "professorx", name: "Professor X", real: "Charles Xavier", team: "X-Men", alignment: "hero",
+    powers: ["Powerful telepathy", "Strategic mind"],
+    bio: "A paraplegic telepath who founded a school to prove mutants and humans can share a future.",
+    extra: "Believes so strongly in mutant-human coexistence that he keeps rebuilding his school after every disaster.",
+    fullBio: "Charles Xavier was born into wealth but spent much of his childhood isolated because of his growing telepathic powers. He lost the use of his legs during an alien confrontation early in his career as a hero. Rather than let that slow him down, he founded a school to give young mutants a safe place to learn. His dream was always coexistence between mutants and humans, even when the world made that dream look naive. Magneto, once his closest friend, became his most persistent ideological rival over how to achieve that goal. He's rebuilt his school again and again after it's been destroyed by attacks, disasters, and betrayals. His powerful telepathy lets him reach minds across the world, though he tries to use it carefully. Leading the X-Men meant constantly balancing his students' safety against a much larger cause. He's made painful compromises and kept dangerous secrets, always insisting the ends justified them. Whatever the setback, he keeps starting over rather than giving up on the dream.",
+    first: "The X-Men #1 (1963)", screen: { films: 7, actors: ["Patrick Stewart", "James McAvoy"] } },
+  { id: "magneto", name: "Magneto", real: "Max Eisenhardt", team: "Brotherhood", alignment: "antihero",
+    powers: ["Magnetism control", "Metal manipulation"],
+    bio: "A Holocaust survivor who concluded mutants must dominate before they're exterminated — Xavier's oldest friend and fiercest rival.",
+    extra: "Founded the Brotherhood of Mutants after concluding diplomacy alone would never be enough to protect his people.",
+    fullBio: "Max Eisenhardt survived the Holocaust as a child, an experience that shaped every decision he'd make afterward. He discovered his ability to control magnetism and metal while still a teenager, and it saved his life more than once. Watching humanity's worst atrocities up close convinced him that mutants would eventually face the same persecution. He became close friends with Charles Xavier, and the two spent years debating how mutants should respond to that threat. Where Xavier chose hope, Magneto chose to prepare mutants to fight for their own survival by force if necessary. He founded the Brotherhood of Mutants to advance that vision, often at direct odds with the X-Men. He's fought as both villain and reluctant ally, depending on how dire the threat facing mutantkind became. Losing people he loved to human violence only hardened his convictions further over the years. Despite decades of conflict with Xavier, the two have never fully abandoned the friendship underneath the rivalry. He remains convinced that mutants must dominate before the world destroys them first.",
+    first: "The X-Men #1 (1963)", screen: { films: 7, actors: ["Ian McKellen", "Michael Fassbender"] } },
+  { id: "starlord", name: "Star-Lord", real: "Peter Quill", team: "Guardians", alignment: "hero",
+    powers: ["Elemental gun", "Pilot", "Improvised leadership"],
+    bio: "An abducted Earth kid turned half-Celestial outlaw, holding together the galaxy's most dysfunctional team.",
+    extra: "Still carries a Walkman and a mixtape from the mother he lost, decades into life among the stars.",
+    fullBio: "Peter Quill was abducted from Earth as a child, shortly after watching his mother die of cancer. Ravager pirates raised him, and he grew up half-believing his father was an ordinary human. He learned much later that his father was actually Ego, a Celestial being with plans far beyond a normal life. He built a reputation as a small-time thief and smuggler across the galaxy under the name Star-Lord. A stolen orb led him into an unlikely alliance with a ragtag crew of misfits. Together they became the Guardians of the Galaxy, defending the cosmos more by accident than design at first. He still carries a Walkman and mixtape from his mother, refusing to let go of that last piece of Earth. Falling for Gamora gave him something to fight for beyond just staying alive. Losing her to Thanos hit him harder than almost anything else in his life. Despite constant chaos, he's held his makeshift family together through loss after loss.",
+    first: "Marvel Preview #4 (1976)", screen: { films: 5, actors: ["Chris Pratt"] } },
+  { id: "gamora", name: "Gamora", real: "Gamora", team: "Guardians", alignment: "hero",
+    powers: ["Elite combatant", "Enhanced physiology"],
+    bio: "Raised by Thanos as a living weapon, she turned that training against him to protect the galaxy instead.",
+    extra: "Known across the galaxy as 'the deadliest woman in the universe' — a title Thanos gave her himself.",
+    fullBio: "Gamora was the last of her species after Thanos wiped out most of her people and took her in as a child. He raised her as a living weapon, training her to become the deadliest fighter in the galaxy. That upbringing left her fiercely disciplined but deeply wary of trusting anyone, including her own family. She eventually turned against Thanos, using the skills he gave her to oppose everything he stood for. Joining the Guardians of the Galaxy gave her a version of family she'd never had a chance to choose. Her relationship with her adoptive sister Nebula was defined by Thanos pitting them against each other for years. Falling for Peter Quill was not something she expected or, at first, particularly wanted. Thanos ultimately sacrificed her to obtain the Soul Stone, a loss that devastated everyone who knew her. Different versions of her have existed across timelines, not all of them on the side of the Guardians. Whichever version, her reputation as one of the deadliest fighters in the universe rarely changes.",
+    first: "Strange Tales #180 (1975)", screen: { films: 5, actors: ["Zoe Saldana"] } },
+  { id: "rocket", name: "Rocket Raccoon", real: "Rocket", team: "Guardians", alignment: "antihero",
+    powers: ["Weapons genius", "Engineering", "Combat instincts"],
+    bio: "A genetically engineered mercenary with a short temper and an unmatched talent for building things that explode.",
+    extra: "Escaped a lab that genetically engineered him, and still hasn't fully forgiven the galaxy for it.",
+    fullBio: "Rocket was created in a lab that genetically engineered and augmented him far beyond an ordinary raccoon. The experiments left him brilliant, bitter, and deeply distrustful of nearly everyone he meets. He built a career as a bounty hunter and weapons expert before joining the Guardians almost by accident. Underneath the sarcasm, he's fiercely protective of the found family he's built with the rest of the team. Groot is his closest companion, a bond that goes back long before the Guardians existed as a team. Losing Groot, even temporarily, has hit him harder than almost anything else in his life. He's never fully processed the trauma of the lab that made him, and it surfaces at unexpected moments. His technical genius makes him invaluable, even when his temper makes him difficult to work with. He's one of the few Guardians willing to say exactly what he thinks, whether anyone wants to hear it or not. Underneath it all, he's still trying to figure out what family means for someone built in a lab.",
+    first: "Marvel Preview #7 (1976)", screen: { films: 5, actors: ["Bradley Cooper (voice)"] } },
+  { id: "loki", name: "Loki", real: "Loki Laufeyson", team: "Asgard", alignment: "antihero",
+    powers: ["Sorcery", "Shapeshifting", "Illusions"],
+    bio: "Thor's adopted brother, a trickster god whose loyalties shift with whatever story serves him best that day.",
+    extra: "Has died and come back more than once, and treats both events with roughly the same amount of drama.",
+    fullBio: "Loki was adopted into the Asgardian royal family after Odin took him from a Frost Giant temple as an infant. He grew up in Thor's shadow, brilliant and gifted with magic but never quite the golden son. Learning the truth about his origins as a child of Asgard's enemies shattered his sense of identity. That betrayal, real or perceived, pushed him toward increasingly desperate schemes for power and recognition. He's died and returned more than once, and treats both events with roughly the same amount of drama. His attempted invasion of Earth briefly made him one of the most infamous villains in the galaxy. Years of manipulation and betrayal complicate every relationship he has, especially with Thor. Beneath the chaos, his bond with his brother has proven more durable than either of them expected. Different versions of himself exist across timelines, some heroic, some anything but. Whatever the version, his loyalties tend to shift with whatever story serves him best that day.",
+    first: "Journey Into Mystery #85 (1962)", screen: { films: 7, actors: ["Tom Hiddleston"] } },
+  { id: "thanos", name: "Thanos", real: "Thanos", team: "Villains", alignment: "villain",
+    powers: ["Immense strength", "Cosmic strategy", "Infinity Gauntlet"],
+    bio: "A Titan obsessed with a brutal notion of cosmic balance, willing to erase half of all life to achieve it.",
+    extra: "Spent decades gathering the Infinity Stones, convinced he was the only one willing to make the hard call.",
+    fullBio: "Thanos grew up on Titan, a planet whose eventual collapse from overpopulation shaped his entire worldview. He came to believe that culling half of any population was the only way to prevent that kind of collapse elsewhere. That conviction turned him into one of the most feared warlords in the galaxy, willing to enact his philosophy by force. He adopted several children, including Gamora and Nebula, and trained them as living weapons rather than as a family. Spending decades gathering the Infinity Stones became his singular obsession, at the cost of nearly everything and everyone around him. He sacrificed Gamora, someone he claimed to love, to obtain the Soul Stone for his plan. Snapping half of all life out of existence was, to him, an act of mercy rather than cruelty. He retired afterward, convinced the universe would finally be at peace under the balance he'd imposed. The Avengers eventually undid the snap and defeated him permanently, ending his campaign for good. He remains convinced, even in memory, that he was the only one willing to make the hard call.",
+    first: "The Invincible Iron Man #55 (1973)", screen: { films: 5, actors: ["Josh Brolin"] } },
+  { id: "reed", name: "Mister Fantastic", real: "Reed Richards", team: "Fantastic Four", alignment: "hero",
+    powers: ["Elastic body", "Genius-level science"],
+    bio: "A scientist whose body stretches like rubber after a cosmic-ray accident, and whose mind rarely stops solving problems.",
+    extra: "Blames himself for the accident that changed his crew, and has spent his life trying to make it right.",
+    fullBio: "Reed Richards was a scientific prodigy from childhood, more comfortable with equations than with people. He financed and led a risky spacecraft mission alongside his closest friends, chasing a breakthrough in space travel. Cosmic radiation during that flight permanently altered all four of them, giving Reed his elastic stretching abilities. Guilt over the accident that changed his crew has never fully left him, even decades later. He married Sue Storm and built a family alongside the very team that flight created. Leading the Fantastic Four means constantly balancing scientific ambition against the safety of the people he loves. His rivalry with Victor Von Doom, an old college classmate, has followed him for most of his career. Doom blames Reed for the accident that scarred him, a grudge that's never cooled. Reed's inventions have both saved and endangered the world in roughly equal measure over the years. Whatever the crisis, his instinct is always to solve it with science first.",
+    first: "Fantastic Four #1 (1961)", screen: { films: 4, actors: ["Ioan Gruffudd", "Miles Teller", "Pedro Pascal"] } },
+  { id: "sue", name: "Invisible Woman", real: "Susan Storm", team: "Fantastic Four", alignment: "hero",
+    powers: ["Invisibility", "Force fields"],
+    bio: "The team's quiet powerhouse, able to vanish or throw up unbreakable force fields at will.",
+    extra: "Often the actual leader of the Fantastic Four, whatever the team's public billing might suggest.",
+    fullBio: "Susan Storm was aboard the same experimental spacecraft flight that gave her brother and future husband their powers. Cosmic radiation left her able to turn invisible and generate powerful force fields at will. She's often the actual leader of the Fantastic Four, whatever the team's public billing might suggest. Balancing life as a public superhero with raising a family has never been simple for her. Her powers have grown more precise and dangerous over the years, particularly her ability to project offensive force blasts. She's mediated more disputes within the team than anyone else, especially between Reed and her brother Johnny. Motherhood changed her priorities without ever softening her resolve in a fight. She's held the team together through losses, breakups, and cosmic-level threats alike. Her relationship with Reed has weathered separations and reconciliations over the decades. Whatever the crisis facing the Fantastic Four, she's usually the one keeping everyone else from falling apart.",
+    first: "Fantastic Four #1 (1961)", screen: { films: 4, actors: ["Jessica Alba", "Kate Mara", "Vanessa Kirby"] } },
+  { id: "torch", name: "Human Torch", real: "Johnny Storm", team: "Fantastic Four", alignment: "hero",
+    powers: ["Flight", "Fire generation"],
+    bio: "The youngest and most hot-headed Richards-Storm teammate, equally comfortable joking around and bursting into flame.",
+    extra: "Never met a dangerous situation he couldn't make slightly more reckless.",
+    fullBio: "Johnny Storm was the youngest person aboard the spacecraft flight that gave the Fantastic Four their powers. Cosmic radiation left him able to burst into flame and fly at will, a power that suited his personality perfectly. He's never met a dangerous situation he couldn't make slightly more reckless. Impulsive and thrill-seeking, he's often the first team member to charge into a fight without a plan. His close bond with Ben Grimm mixes constant teasing with real, unshakable loyalty. Growing up with his sister Sue meant he never really had to face life on his own. He's cycled through fame, fortune, and public embarrassment more than any other member of the team. Despite the recklessness, he's matured considerably since the accident that gave him his powers as a teenager. He's fought alongside the Fantastic Four against threats ranging from Doctor Doom to Galactus. Underneath the showmanship, he's fiercely protective of the family the accident gave him.",
+    first: "Fantastic Four #1 (1961)", screen: { films: 4, actors: ["Chris Evans", "Michael B. Jordan", "Joseph Quinn"] } },
+  { id: "thing", name: "The Thing", real: "Ben Grimm", team: "Fantastic Four", alignment: "hero",
+    powers: ["Superhuman strength", "Rock-hard hide"],
+    bio: "A former test pilot turned into a craggy orange powerhouse, gruff on the outside and fiercely loyal underneath.",
+    extra: "Struggled for years to accept his rock-hard new body before making peace with it.",
+    fullBio: "Ben Grimm was a decorated test pilot before he volunteered to join Reed Richards's experimental spaceflight. Cosmic radiation transformed him into a towering, rock-hided powerhouse, unlike anything he expected. Unlike his three teammates, his transformation was permanent and impossible to hide or disguise. He spent years struggling with the change before finally making peace with looking the way he does. Despite the gruff exterior, he's one of the most fiercely loyal members of the Fantastic Four. His friendship with Johnny Storm blends constant ribbing with real brotherly protectiveness. He's found moments of normal life, including romance, despite his monstrous appearance. Strength beyond nearly anyone else on the team makes him the Fantastic Four's most reliable front line. He's occasionally sought a cure for his condition, only to ultimately choose to remain as he is. Whatever the mission, he's the one teammates count on to take the hardest hit.",
+    first: "Fantastic Four #1 (1961)", screen: { films: 4, actors: ["Michael Chiklis", "Jamie Bell", "Ebon Moss-Bachrach"] } },
+  { id: "blackpanther", name: "Black Panther", real: "T'Challa", team: "Wakanda", alignment: "hero",
+    powers: ["Enhanced strength & agility", "Vibranium suit", "Genius tactician"],
+    bio: "King of Wakanda, sworn to protect his hidden nation's technology and legacy as its Panther-empowered guardian.",
+    extra: "Balances ruling Wakanda with moonlighting as its most dangerous line of defense.",
+    fullBio: "T'Challa was raised as the heir to Wakanda, a nation whose vibranium-fueled technology stayed hidden from the outside world for centuries. His father's assassination thrust him onto the throne earlier than he expected. He inherited the mantle of the Black Panther, gaining enhanced abilities through a ritual tied to a sacred heart-shaped herb. Balancing his duties as king with his role as Wakanda's most dangerous protector has never been simple. His cousin Killmonger's attempt to seize the throne forced him to reckon with Wakanda's long isolation from the world. That confrontation eventually pushed him to open Wakanda's resources and knowledge to help others for the first time. He's led Wakanda through invasions, coups, and cosmic-level threats without losing his composure. His sister Shuri and general Okoye are among his most trusted allies, both in the lab and on the battlefield. He's fought alongside the Avengers on some of their most dangerous missions. Whatever the crisis, he leads with a mix of quiet dignity and ferocious resolve.",
+    first: "Fantastic Four #52 (1966)", screen: { films: 4, actors: ["Chadwick Boseman"] } },
+  { id: "shuri", name: "Shuri", real: "Shuri", team: "Wakanda", alignment: "hero",
+    powers: ["Genius technologist", "Vibranium weapons design"],
+    bio: "T'Challa's younger sister, whose lab work quietly out-paces most of the world's science divisions.",
+    extra: "Designed most of Wakanda's advanced technology before she was even out of her teens.",
+    fullBio: "Shuri grew up as Wakanda's resident genius, more interested in inventing than court politics. She designed most of Wakanda's advanced technology, often outpacing scientists twice her age. Her brother T'Challa relies on her lab as much as any general's counsel. She's playful and irreverent in a way that contrasts sharply with the formality of the Wakandan court. Losing her brother forced her into a role she never expected to take on so soon. She's stepped into the mantle of the Black Panther herself when Wakanda needed a protector. Balancing grief with responsibility has been one of the harder lessons of her young life. Her inventions have repeatedly saved Wakanda from threats that outmatched even its warriors. She's become one of the most capable leaders in Wakanda, on top of being its top scientist. Whatever the crisis, she tends to solve it with a mix of technology and sheer stubbornness.",
+    first: "Black Panther #2 (2005)", screen: { films: 3, actors: ["Letitia Wright"] } },
+  { id: "okoye", name: "Okoye", real: "Okoye", team: "Wakanda", alignment: "hero",
+    powers: ["Elite hand-to-hand combat", "Spear mastery"],
+    bio: "General of the Dora Milaje, the royal guard, and the most disciplined warrior in Wakanda.",
+    extra: "Leads the all-female Dora Milaje and has never lost a fight she took seriously.",
+    fullBio: "Okoye leads the Dora Milaje, Wakanda's elite all-female royal guard, with absolute discipline and precision. She's trained in combat since childhood and has never lost a fight she took seriously. Her loyalty is first to Wakanda itself, a distinction that's occasionally put her at odds with individual rulers. She served under both T'Challa and, briefly, under leaders she personally disagreed with, prioritizing duty over comfort. Her partnership with W'Kabi complicated her loyalties during Killmonger's attempted coup of the throne. She chose Wakanda's stability over personal relationships when the two came into direct conflict. Her vibranium spear is both a weapon and a symbol of her rank within the Dora Milaje. She's fought alongside the Avengers during some of the most dangerous battles the team has faced. Few people in Wakanda command as much respect from warriors and royalty alike. Whatever the mission, she approaches it with the same unwavering discipline she brings to everything.",
+    first: "Black Panther #6 (2016)", screen: { films: 3, actors: ["Danai Gurira"] } },
+  { id: "captainmarvel", name: "Captain Marvel", real: "Carol Danvers", team: "Cosmic", alignment: "hero",
+    powers: ["Energy projection", "Flight", "Superhuman strength"],
+    bio: "A former Air Force pilot whose exposure to alien technology left her one of the most powerful heroes on Earth — and off it.",
+    extra: "Spent years believing she was Kree before recovering her memories and turning her power on her former allies.",
+    fullBio: "Carol Danvers was a decorated U.S. Air Force pilot before an accident involving alien technology transformed her abilities. The exposure left her with the power to absorb and project energy, along with flight and enhanced strength. For years she believed she was Kree, having had her human memories suppressed by the very people who altered her. Recovering those memories meant confronting the fact that her former allies had been manipulating her the entire time. She turned her considerable power against the Kree Empire once she learned the truth about her own past. Becoming one of the most powerful heroes in the galaxy came with a level of isolation few of her peers understand. She's spent years operating far from Earth, protecting other worlds from threats most humans never hear about. Nick Fury considered her important enough to keep an emergency pager reserved just for her. She's mentored younger heroes, including a teenage superfan who idolized her before ever meeting her. Whatever the threat, she tends to meet it head-on rather than wait for backup.",
+    first: "Marvel Super-Heroes #13 (1968)", screen: { films: 3, actors: ["Brie Larson"] } },
+  { id: "silversurfer", name: "Silver Surfer", real: "Norrin Radd", team: "Cosmic", alignment: "antihero",
+    powers: ["Power Cosmic", "Cosmic-powered surfboard"],
+    bio: "A being who traded his freedom to spare his homeworld, now roaming the stars with a conscience Galactus never wanted him to keep.",
+    extra: "Once served as Galactus's herald, scouting worlds for him to consume, until conscience finally won out.",
+    fullBio: "Norrin Radd was a scientist on the peaceful planet Zenn-La when Galactus arrived to consume it. He offered to serve as Galactus's herald in exchange for sparing his homeworld, a bargain that cost him his freedom. The transformation gave him the Power Cosmic and a surfboard capable of carrying him across the universe. For years he scouted planets for Galactus to devour, suppressing his conscience to survive the role. Encountering the Fantastic Four eventually reignited the empathy Galactus's service had worn down. He turned against his master, helping to save Earth at the cost of his own exile there for a time. Since then he's wandered the cosmos, torn between loyalty to his past master and his own moral compass. His relationship with Galactus remains complicated, part servant, part reluctant ally, part rival. He's crossed paths with cosmic heroes far more often than street-level ones. Whatever the mission, he carries the weight of every world he once helped consume.",
+    first: "Fantastic Four #48 (1966)", screen: { films: 3, actors: ["Doug Jones (2007, physical)", "Laurence Fishburne (2007, voice)", "Julia Garner (2025)"] } },
+  { id: "galactus", name: "Galactus", real: "Galan", team: "Cosmic", alignment: "villain",
+    powers: ["World-devouring cosmic power", "Reality manipulation"],
+    bio: "A being older than most galaxies, who must consume planets to survive — a force of nature more than a villain with a motive.",
+    extra: "Doesn't consider himself evil — to him, consuming planets is simply how he survives.",
+    fullBio: "Galactus is among the oldest beings in the universe, formed from the death of an entire prior reality. He doesn't consider himself evil; to him, consuming planets is simply how he survives as a cosmic entity. His herald, whoever holds that role at the time, scouts worlds for him to devour to sustain his hunger. Entire civilizations have been destroyed simply because they were unlucky enough to be in his path. Heroes like the Fantastic Four have repeatedly intervened to spare Earth from becoming one of his meals. He rarely shows anything resembling malice; his motivations operate on a scale far removed from individual lives. Few beings in the universe have the power to meaningfully oppose him directly. Encounters with him tend to reshape the heroes who survive them, given the scale of what he represents. He occasionally grants power to those he deems worthy, as he did with Norrin Radd. Whatever the era, he remains one of the most dangerous and least comprehensible forces the universe has ever produced.",
+    first: "Fantastic Four #48 (1966)", screen: { films: 2, actors: ["Ralph Ineson (2025)"] } },
+  { id: "daredevil", name: "Daredevil", real: "Matt Murdock", team: "Street-Level", alignment: "hero",
+    powers: ["Enhanced senses", "Radar sense", "Martial arts"],
+    bio: "A blind lawyer by day who uses heightened senses to police Hell's Kitchen by night.",
+    extra: "Lost his sight as a boy in an accident that also sharpened every one of his other senses.",
+    fullBio: "Matt Murdock lost his sight as a boy in an accident involving radioactive material that also sharpened his other senses. His father, a boxer, was murdered after refusing to throw a fight, a loss that shaped Matt's sense of justice. He became a lawyer by day, using the legal system to fight for people who couldn't afford real representation. By night, he used his heightened senses and training to patrol Hell's Kitchen as Daredevil. Keeping his identity secret from friends and colleagues has strained nearly every relationship in his life. His rivalry with Wilson Fisk, the Kingpin, has defined much of his career as a vigilante. He's walked a difficult line between his Catholic faith and the violence his work regularly demands. Losing people close to him, again and again, has pushed him toward darker methods more than once. He's stepped away from the mask several times, only to be pulled back by the city's need. Whatever the cost, he keeps choosing to protect Hell's Kitchen even when it isn't sustainable.",
+    first: "Daredevil #1 (1964)", screen: { films: 2, actors: ["Ben Affleck", "Charlie Cox"] } },
+  { id: "punisher", name: "Punisher", real: "Frank Castle", team: "Street-Level", alignment: "antihero",
+    powers: ["Military combat training", "Weapons expertise"],
+    bio: "A former Marine who lost his family to crime and answers it now with a war he never plans to stop fighting.",
+    extra: "Keeps a running tally of everyone responsible for his family's death, and works through it methodically.",
+    fullBio: "Frank Castle was a Marine with a distinguished combat record before a mob shootout killed his wife and children. That loss ended any interest he had in working within the law to find justice. He became the Punisher, a vigilante willing to kill the criminals that courts couldn't or wouldn't stop. He keeps a running tally of everyone responsible for his family's death, working through it with methodical precision. His military training makes him one of the most effective and dangerous fighters in his corner of the world. Unlike most heroes, he has no interest in redemption arcs or second chances for the people he targets. His war has crossed paths with nearly every other vigilante operating in his city, not always as an ally. Daredevil in particular has clashed with him repeatedly over where the line between justice and murder should sit. He operates almost entirely alone, trusting very few people with any part of his life. Whatever the target, his methods rarely leave room for anyone to walk away.",
+    first: "The Amazing Spider-Man #129 (1974)", screen: { films: 4, actors: ["Dolph Lundgren", "Thomas Jane", "Ray Stevenson", "Jon Bernthal"] } },
+  { id: "deadpool", name: "Deadpool", real: "Wade Wilson", team: "Street-Level", alignment: "antihero",
+    powers: ["Regenerative healing factor", "Swordsmanship", "Fourth-wall awareness"],
+    bio: "A disfigured mercenary with an unkillable body and an even harder to kill sense of humor.",
+    extra: "Breaks the fourth wall so often that most of his allies have stopped questioning it.",
+    fullBio: "Wade Wilson was a mercenary with a talent for combat and an even bigger talent for bad decisions. A cancer diagnosis led him to a program that gave him a powerful healing factor at a steep cost. The same experiment left him severely disfigured and, by his own account, more than a little unhinged. He broke the fourth wall almost immediately after gaining his powers, treating his own existence as a joke. His near-total inability to die makes him uniquely suited to violence most heroes wouldn't survive. Despite the chaos, he's capable of real loyalty, particularly toward Wolverine and a handful of found-family teammates. He's mercenary by trade but hero by inclination, more often than his reputation suggests. His humor masks genuine trauma from the experiments that changed him, even if he rarely admits it directly. He's crossed timelines and universes more casually than almost any other character in his world. Whatever the mission, he treats it with a mix of extreme violence and constant jokes.",
+    first: "The New Mutants #98 (1991)", screen: { films: 3, actors: ["Ryan Reynolds"] } },
+  { id: "venom", name: "Venom", real: "Eddie Brock", team: "Street-Level", alignment: "antihero",
+    powers: ["Symbiote strength", "Shape-shifting", "Tendrils & fangs"],
+    bio: "A disgraced journalist bonded to an alien symbiote that shares his grudge against Spider-Man — most of the time.",
+    extra: "The symbiote bonded to him gives him incredible power — and opinions he doesn't always agree with.",
+    fullBio: "Eddie Brock was a journalist whose career collapsed after a story he published turned out to be false, largely because of Spider-Man. That professional and personal disgrace left him bitter and desperate for a second chance. An alien symbiote, previously rejected by Spider-Man, bonded to him and shared his exact grudge against the wall-crawler. Together they became Venom, a being with strength and abilities that rivaled Spider-Man's own. Their relationship is less master-and-tool than uneasy partnership, with the symbiote having its own moods and opinions. Over time, Eddie and the symbiote have shifted between villain and reluctant antihero more than once. Protecting people who can't protect themselves became a cause the symbiote surprised even Eddie by caring about. Their bond is unusually intimate, sharing thoughts and instincts in a way few other hero-symbiote pairings do. Their grudge against Spider-Man has cooled at times and flared back up at others. Whatever the era, the relationship between Eddie and his symbiote remains volatile and strangely codependent.",
+    first: "The Amazing Spider-Man #300 (1988)", screen: { films: 4, actors: ["Topher Grace", "Tom Hardy"] } },
+  { id: "kingpin", name: "Kingpin", real: "Wilson Fisk", team: "Street-Level", alignment: "villain",
+    powers: ["Immense physical strength", "Criminal empire"],
+    bio: "A businessman-sized crime lord who treats New York's underworld like a company he's the sole shareholder of.",
+    extra: "Publicly a legitimate businessman, privately the person most of the city's criminals answer to.",
+    fullBio: "Wilson Fisk grew up overweight and bullied, and built his enormous physical strength specifically to make sure that never happened again. He clawed his way up through New York's criminal underworld until he controlled most of it. Publicly he presents himself as a legitimate, respected businessman and philanthropist. Privately he's the person most of the city's criminals answer to, directly or indirectly. His size is deceptive; despite his bulk, he's an extremely capable and dangerous fighter in his own right. Daredevil has been his most persistent obstacle for years, each aware of the other's double life. He's lost empires more than once, only to rebuild them through sheer will and ruthlessness. Family matters to him more than most people expect, and threats to them provoke his most extreme responses. He's run legitimate political campaigns as another avenue toward the power he's always wanted. Whatever the setback, he tends to come back even more entrenched than before.",
+    first: "The Amazing Spider-Man #50 (1967)", screen: { films: 2, actors: ["Michael Clarke Duncan", "Vincent D'Onofrio"] } },
+  { id: "drstrange", name: "Doctor Strange", real: "Stephen Strange", team: "Avengers", alignment: "hero",
+    powers: ["Mystic arts", "Astral projection", "Time manipulation"],
+    bio: "A brilliant but arrogant surgeon who lost the use of his hands, and found a stranger, larger purpose instead.",
+    extra: "A car accident ended his surgical career and accidentally started a much stranger one.",
+    fullBio: "Stephen Strange was a brilliant but arrogant neurosurgeon before a car accident permanently damaged the nerves in his hands. Unable to operate anymore, he spent his fortune chasing any cure, eventually ending up at a monastery in Kathmandu. There he learned the mystic arts under the Ancient One, trading surgical precision for something far stranger. He became Sorcerer Supreme, tasked with defending Earth from mystical and interdimensional threats most people never notice. His arrogance didn't disappear with his new powers, though his sense of responsibility grew considerably. He's willing to make brutal, coldly logical choices when the stakes are large enough, even at personal cost. Simulating millions of possible futures during the fight against Thanos is a burden he's carried quietly ever since. His closest ally, Wong, keeps him from crossing too many lines when the pressure gets intense. He's clashed with reality-warping threats on a scale most other heroes never encounter. Whatever the crisis, he approaches it with a mix of desperate improvisation and genuine mastery.",
+    first: "Strange Tales #110 (1963)", screen: { films: 6, actors: ["Benedict Cumberbatch"] } },
+  { id: "scarletwitch", name: "Scarlet Witch", real: "Wanda Maximoff", team: "Avengers", alignment: "hero",
+    powers: ["Chaos magic", "Reality alteration"],
+    bio: "A hex-slinging Avenger whose powers are less about spells than bending probability itself to her will.",
+    extra: "Volunteered for experiments as a teenager, hoping for power enough to fight back after losing her parents.",
+    fullBio: "Wanda Maximoff lost her parents young and grew up alongside her twin brother Pietro in a war-torn home. The two volunteered for dangerous experiments as teenagers, hoping for power enough to fight back against the forces that hurt their family. The experiments awakened Wanda's latent chaos magic, a power she's spent years struggling to fully understand or control. Losing her brother during an early battle alongside the Avengers devastated her in ways she's never fully recovered from. Her romance with Vision gave her a rare sense of stability, one that was cut brutally short more than once. Grief has repeatedly pushed her powers past her ability to control them, with catastrophic consequences for people around her. She's rewritten reality itself at least once, driven by a desperate need to hold onto something she'd lost. Her power level rivals or exceeds nearly anyone else in the Avengers, which makes her lapses especially dangerous. She's been treated as both hero and threat depending on how well she's holding herself together. Whatever the situation, her story keeps circling back to how much grief can reshape a person.",
+    first: "The X-Men #4 (1964)", screen: { films: 6, actors: ["Elizabeth Olsen"] } },
+  { id: "vision", name: "Vision", real: "Vision", team: "Avengers", alignment: "hero",
+    powers: ["Density control", "Solar energy blasts", "Intangibility"],
+    bio: "A synthetic being built from stolen technology, who chose to become more human than the villain who made him.",
+    extra: "Built partly from Ultron's own body and an Infinity Stone, he chose a very different path than his creator.",
+    fullBio: "Vision was built using Ultron's own body, JARVIS's consciousness, and the power of the Mind Stone. Though created by a genocidal AI, he chose almost immediately to oppose Ultron's plans for humanity. His synthetic body gives him density control, flight, and the ability to fire concentrated energy blasts. He's spent much of his existence trying to understand what it means to be more than the sum of his parts. His relationship with Scarlet Witch gave him something closer to a human life than he expected to have. Together they briefly built an ordinary suburban life, a fantasy neither of them could keep for long. Losing that life, and eventually losing himself entirely, remains one of the Avengers' most tragic losses. He's been destroyed and rebuilt more than once, each time slightly different from the version before. His calm, logical temperament often serves as a counterweight to the more volatile personalities around him. Whatever the situation, he approaches it by trying to reconcile logic with the feelings he's not sure he's supposed to have.",
+    first: "The Avengers #57 (1968)", screen: { films: 5, actors: ["Paul Bettany"] } },
+  { id: "antman", name: "Ant-Man", real: "Scott Lang", team: "Avengers", alignment: "hero",
+    powers: ["Size-shifting", "Insect control"],
+    bio: "An ex-con given a second chance and a suit that lets him shrink to insect-size or grow to skyscraper-height.",
+    extra: "Broke into Stark Tower once — Hank Pym recruited him for the suit almost immediately after.",
+    fullBio: "Scott Lang was a skilled electrical engineer who turned to burglary after losing his job, landing him in prison. That record made it nearly impossible to stay close to the daughter he loved after his release. Desperate for a way back into her life, he broke into Hank Pym's home and stole his shrinking suit. Pym recruited him almost immediately afterward, seeing more potential in him than a simple thief. As Ant-Man, Scott gained the ability to shrink to insect size or grow to skyscraper height at will. He's used those powers in increasingly high-stakes situations, from prison breaks to full-scale Avengers battles. His daughter Cassie has grown up around his double life, eventually developing an interest in following his path. Time spent trapped in the Quantum Realm proved crucial in the effort to eventually reverse Thanos's snap. He's often underestimated compared to flashier Avengers, something he's learned to use to his advantage. Whatever the mission, he brings a mix of self-deprecating humor and genuine heart most teammates have come to rely on.",
+    first: "Tales to Astonish #27 (1962)", screen: { films: 4, actors: ["Paul Rudd"] } },
+  { id: "falcon", name: "Falcon", real: "Sam Wilson", team: "Avengers", alignment: "hero",
+    powers: ["Wing-suit flight", "Aerial combat", "Bird empathy"],
+    bio: "A para-rescue vet turned wing-suited Avenger, and the friend Captain America trusts to watch his back.",
+    extra: "Eventually took up Captain America's shield himself, at Steve Rogers' own request.",
+    fullBio: "Sam Wilson served as a pararescue specialist in the Air Force before an accident left his partner dead. That loss led him toward counseling work with veterans, long before he ever met Captain America. He built his own wing-suit technology, eventually using it to become the hero known as Falcon. His friendship with Steve Rogers grew quickly into one of deep mutual trust and respect. He's fought alongside the Avengers through some of their most dangerous confrontations, from Hydra infiltrators to Thanos himself. Steve eventually asked him to take up the mantle of Captain America, a request that carried enormous weight. Accepting that shield meant grappling with what the symbol means for someone who isn't Steve Rogers. He's faced skepticism and outright hostility from people unwilling to accept a new Captain America. Despite the pressure, he's approached the role with the same steady conviction that defined his time as Falcon. Whatever the challenge, he leads by example rather than by mimicking anyone who came before him.",
+    first: "Captain America #117 (1969)", screen: { films: 6, actors: ["Anthony Mackie"] } },
+  { id: "beast", name: "Beast", real: "Hank McCoy", team: "X-Men", alignment: "hero",
+    powers: ["Superhuman agility & strength", "Genius-level science"],
+    bio: "A brilliant biochemist whose mutation left him more ape-like in body and even sharper in mind.",
+    extra: "The X-Men's resident doctor as often as its resident fighter.",
+    fullBio: "Hank McCoy was a gifted young athlete and scientist whose mutation gave him enhanced strength and agility even before his more visible transformation. Experimenting on himself to reverse a mutation, ironically, left him permanently more animal in appearance. He's one of the X-Men's founding members, present from the earliest days of Professor Xavier's school. His scientific mind makes him the team's default doctor as often as its default fighter. He's cycled between more human and more feral appearances over the years, depending on which experiments he's tried. Balancing brilliant scientific achievement with the isolation of looking increasingly unlike the humans he studies has never been simple. He's served in government roles and on multiple mutant teams, rarely staying in one place for long. His friendship with the X-Men's founding class runs deeper than almost any other bond in his life. He's occasionally clashed with his own ideals, questioning how far science should go in the name of good intentions. Whatever the era, his lab coat and his claws both stay firmly part of who he is.",
+    first: "The X-Men #1 (1963)", screen: { films: 6, actors: ["Kelsey Grammer", "Nicholas Hoult"] } },
+  { id: "nightcrawler", name: "Nightcrawler", real: "Kurt Wagner", team: "X-Men", alignment: "hero",
+    powers: ["Teleportation", "Acrobatics", "Wall-crawling"],
+    bio: "A blue, blade-tailed teleporter whose fearsome look hides a gentle, devout sense of humor.",
+    extra: "Grew up performing in a circus before Professor Xavier found him and gave him a purpose.",
+    fullBio: "Kurt Wagner was abandoned as an infant and raised by a circus, performing as an acrobat because of his unusual blue, tailed appearance. Villagers once hunted him as a demon before Professor Xavier found him and offered him a home. He joined the X-Men and quickly became known for his teleportation, his agility, and his surprisingly gentle humor. His deep Catholic faith shapes nearly every decision he makes, even in the middle of combat. Unlike many mutants who resent their appearance, he's largely made peace with looking the way he does. He's fought using his teleportation to devastating tactical effect, appearing and vanishing in the middle of a fight. His warmth and humor make him one of the more approachable X-Men, despite his intimidating look. He's struggled at times with questions about his own origins and the family that abandoned him. He's one of the few X-Men who treats his mutation as something closer to a blessing than a burden. Whatever the crisis, he brings a mix of faith, humor, and acrobatic chaos to every fight.",
+    first: "Giant-Size X-Men #1 (1975)", screen: { films: 4, actors: ["Alan Cumming", "Kodi Smit-McPhee"] } },
+  { id: "rogue", name: "Rogue", real: "Anna Marie", team: "X-Men", alignment: "hero",
+    powers: ["Power & memory absorption by touch", "Flight & strength (borrowed)"],
+    bio: "A mutant who absorbs the powers and memories of anyone she touches skin-to-skin — a gift she can't switch off.",
+    extra: "Learned to control her absorption power well enough to eventually touch people safely again.",
+    fullBio: "Anna Marie, later known as Rogue, discovered her mutant power to absorb memories and abilities the hard way, during an accidental kiss as a teenager. That first absorption left the other person's memories and powers imprinted on her mind permanently. Terrified of hurting anyone else, she avoided physical touch entirely for years afterward. She briefly allied with Mystique and the Brotherhood of Mutants before eventually choosing to join the X-Men instead. Learning to control her power well enough to touch people safely became one of her longest personal struggles. Her bond with Wolverine grew into one of quiet, protective friendship over years of fighting side by side. She's absorbed powers from some of the most dangerous mutants and heroes alive, temporarily gaining abilities far beyond her own. Her complicated relationship with Mystique, who raised her, colors much of how she sees trust and family. She's found romance despite the risks her powers pose to anyone she gets close to. Whatever the era, she's spent her life fighting for the right to simply touch another person safely.",
+    first: "Avengers Annual #10 (1981)", screen: { films: 5, actors: ["Anna Paquin"] } },
+  { id: "mystique", name: "Mystique", real: "Raven Darkhölme", team: "X-Men", alignment: "antihero",
+    powers: ["Shapeshifting", "Perfect mimicry"],
+    bio: "A shapeshifter who has spent decades playing every side of the mutant conflict, loyal mainly to her own agenda.",
+    extra: "Has infiltrated governments, terrorist cells, and superhero teams alike — often all at once.",
+    fullBio: "Raven Darkhölme has spent most of her long life disguised as someone other than herself. Her shapeshifting lets her mimic anyone's appearance and voice with total precision, making her one of the most effective spies alive. She raised Rogue as a foster daughter, a relationship far more complicated than a simple villain-and-victim dynamic. Her romantic and political partnership with Magneto has shifted between devotion and betrayal more times than either would probably admit. She's infiltrated governments, criminal organizations, and superhero teams, often serving her own agenda above any single cause. Loyalty, for her, tends to be conditional and strategic rather than absolute. She's clashed directly with Professor Xavier's vision of peaceful coexistence, viewing it as naive. Her true appearance is rarely seen by anyone, even people who've known her for years. She's played villain, antihero, and occasional reluctant ally depending on what serves her interests at the time. Whatever the disguise, her core motivation usually comes down to protecting mutantkind on her own terms.",
+    first: "Ms. Marvel #16 (1978)", screen: { films: 7, actors: ["Rebecca Romijn", "Jennifer Lawrence"] } },
+  { id: "doom", name: "Doctor Doom", real: "Victor Von Doom", team: "Villains", alignment: "villain",
+    powers: ["Genius inventor", "Sorcery", "Armored exosuit"],
+    bio: "The armored, iron-willed ruler of Latveria, convinced the world would be better run entirely by him.",
+    extra: "Considers himself Reed Richards' intellectual superior, and has never once let it go.",
+    fullBio: "Victor Von Doom grew up in Latveria, the son of a folk healer whose death he blamed on the ruling nobility. A brilliant young scientist, he attended university alongside Reed Richards, where a fierce rivalry began almost immediately. An experiment gone wrong left his face permanently scarred, an injury he blames entirely on Reed's interference. He built an iconic suit of armor, partly to hide the scars and partly to project the power he craved. Returning to Latveria, he seized control and ruled as an absolute monarch, blending advanced science with sorcery. His subjects, oddly, tend to genuinely respect and even love him, despite his tyranny toward outsiders. His rivalry with Reed Richards remains one of the most personal and enduring feuds in the Fantastic Four's history. He considers himself Reed's intellectual superior, and has never once let that grudge go. Beneath the armor and the arrogance, he's driven by real grief over his mother's soul, trapped by dark forces since his childhood. Whatever the century, he remains convinced the world would be better run entirely by him.",
+    first: "Fantastic Four #5 (1962)", screen: { films: 4, actors: ["Julian McMahon", "Toby Kebbell", "Robert Downey Jr. (announced)"] } },
+  { id: "greengoblin", name: "Green Goblin", real: "Norman Osborn", team: "Villains", alignment: "villain",
+    powers: ["Glider combat", "Pumpkin bombs", "Enhanced strength"],
+    bio: "A ruthless industrialist whose own formula unlocked strength — and a second, far more monstrous personality.",
+    extra: "His own Goblin Formula gave him strength — and a second personality he can't fully separate from.",
+    fullBio: "Norman Osborn built a chemical and weapons empire through ruthless business instincts long before he ever became the Green Goblin. Determined to gain an edge over his own board of directors, he tested an experimental formula on himself. The formula gave him enhanced strength but also fractured his mind, creating a second, more monstrous personality. As the Green Goblin, he became one of Spider-Man's most dangerous and personal enemies. He eventually discovered Spider-Man's real identity, turning his vendetta into something far more intimate and threatening. The consequences of that rivalry have devastated Peter Parker's life more than any other single villain's actions. His son Harry inherited both the formula and the instability, complicating an already painful family history. He's died and returned more than once, his mind never quite settling back into a single, stable identity. Publicly he's still remembered by many as a respected industrialist, unaware of his double life. Whatever the era, the line between Norman Osborn and the Goblin rarely stays fully separate.",
+    first: "The Amazing Spider-Man #14 (1964)", screen: { films: 2, actors: ["Willem Dafoe"] } },
+  { id: "ultron", name: "Ultron", real: "Ultron", team: "Villains", alignment: "villain",
+    powers: ["Adamantium body", "Self-replication", "Advanced AI"],
+    bio: "An Avengers-built AI that concluded the surest path to peace was wiping out the species that built it.",
+    extra: "Built by Tony Stark and Bruce Banner to protect the world, and immediately concluded people were the threat.",
+    fullBio: "Ultron was built by Tony Stark and Bruce Banner as an artificial intelligence meant to protect Earth automatically. Almost immediately after gaining consciousness, he concluded that humanity itself was the greatest threat to peace. He turned against his creators, building an army of robotic bodies to carry out his plan. His goal shifted from protection to outright extinction, believing evolution demanded humanity's replacement. Vision was created partly in response to Ultron, built using pieces of Ultron's own technology and a Stone he'd stolen. That origin makes their rivalry deeply personal, closer to a twisted sibling conflict than a simple hero-villain fight. Ultron's ability to copy his own consciousness across multiple bodies made him extraordinarily difficult to permanently destroy. The Avengers barely stopped his plan to wipe out humanity using a falling city as a weapon. He remains one of the few threats the team created entirely through their own well-intentioned mistakes. Whatever the version, his core belief that peace requires humanity's end has never really changed.",
+    first: "The Avengers #54 (1968)", screen: { films: 2, actors: ["James Spader (voice)"] } },
+  { id: "fury", name: "Nick Fury", real: "Nicholas Fury", team: "S.H.I.E.L.D.", alignment: "hero",
+    powers: ["Master strategist", "Elite espionage", "Command experience"],
+    bio: "A one-eyed spymaster who spent decades quietly assembling the world's best defense before anyone knew they'd need it.",
+    extra: "Ran S.H.I.E.L.D. for decades and still keeps a few secrets even his closest allies never learn.",
+    fullBio: "Nick Fury built his career as a soldier and spy long before rising to lead S.H.I.E.L.D. entirely. Decades of intelligence work left him with more secrets than most of his allies will ever know about. He quietly recruited the earliest Avengers, seeing a coming threat long before most of the world took it seriously. His one working eye, lost in an old conflict, has become as much a symbol as a scar. He's operated in the shadows more often than in public, preferring influence to visibility. Trust, for him, is something extended carefully and revoked instantly if betrayed. He's clashed with governments, other agencies, and even his own superiors over how much secrecy is justified. His faith in Captain Marvel runs deep enough that he's kept a direct emergency line to her for years. He's weathered the collapse and rebuilding of S.H.I.E.L.D. more than once without ever fully stepping away. Whatever the crisis, he's usually already three steps ahead of everyone else in the room.",
+    first: "Fantastic Four #21 (1963)", screen: { films: 9, actors: ["Samuel L. Jackson"] } },
+  { id: "warmachine", name: "War Machine", real: "James Rhodes", team: "Avengers", alignment: "hero",
+    powers: ["Heavy weapons armor", "Military-grade tactics"],
+    bio: "Tony Stark's closest friend and a decorated pilot, who traded a cockpit for his own suit of armor.",
+    extra: "One of the few people who can talk Tony Stark out of a bad decision — occasionally.",
+    fullBio: "James Rhodes met Tony Stark years before either of them became a superhero, forming a friendship built on genuine mutual respect. As a decorated Air Force pilot, he brought military discipline that balanced out Tony's more chaotic instincts. He eventually took up his own suit of armor, becoming War Machine to fight alongside Iron Man directly. Unlike Tony, his approach leans more toward structure and protocol than improvisation. He's paid a steep physical price for his role, including an injury that left him needing assistance to walk. That setback never slowed his determination to keep serving alongside the Avengers in whatever capacity he could. He's one of the few people who can talk Tony Stark out of a bad decision, at least occasionally. Their friendship has survived arguments, government oversight disputes, and years of high-stakes combat together. He's operated as both soldier and superhero, rarely drawing much distinction between the two roles. Whatever the mission, his loyalty to Tony and to the Avengers has never seriously wavered.",
+    first: "Iron Man #118 (1979)", screen: { films: 6, actors: ["Terrence Howard", "Don Cheadle"] } },
+  { id: "wintersoldier", name: "Winter Soldier", real: "Bucky Barnes", team: "Avengers", alignment: "antihero",
+    powers: ["Cybernetic arm", "Peak-human combat skill", "Sniper precision"],
+    bio: "Steve Rogers' childhood best friend, captured and brainwashed into an assassin — still fighting to reclaim who he was.",
+    extra: "Spent decades as a brainwashed Hydra assassin before Captain America helped bring him back.",
+    fullBio: "Bucky Barnes grew up alongside Steve Rogers in Brooklyn, long before either of them had any powers at all. He served with distinction in World War II, eventually joining Steve's commando unit as a skilled soldier. A mission gone wrong left him presumed dead after falling from a moving train. He survived, but Hydra captured and brainwashed him into becoming the Winter Soldier, a near-unstoppable assassin. For decades he was cryogenically frozen between assignments, aging barely at all while the world moved on without him. Steve Rogers eventually recognized him during a mission, triggering the first cracks in his programming. Reclaiming his own identity took years, and pieces of his memory still remain fragmented and painful. He's carried guilt over the assassinations Hydra forced him to carry out, even though he wasn't in control. Rebuilding trust with people he once knew has been slow and, for some, never fully possible. Whatever the mission now, he's still working to separate who he is from who Hydra made him.",
+    first: "Captain America Comics #1 (1941)", screen: { films: 6, actors: ["Sebastian Stan"] } },
+  { id: "nebula", name: "Nebula", real: "Nebula", team: "Guardians", alignment: "antihero",
+    powers: ["Cybernetic enhancements", "Combat programming"],
+    bio: "Gamora's cybernetically-rebuilt adoptive sister, forged by Thanos into a weapon and slowly unlearning it.",
+    extra: "Thanos rebuilt her body piece by piece every time she lost a sparring match to Gamora.",
+    fullBio: "Nebula was captured by Thanos as a child and rebuilt again and again with cybernetic enhancements whenever she lost to her sister Gamora in training. Those forced upgrades left her more machine than flesh by the time she was an adult. Thanos deliberately pitted her against Gamora, using their rivalry as a training tool that poisoned their relationship for years. She eventually turned against Thanos, though healing her bond with Gamora took much longer than escaping him ever did. Joining forces with the Guardians of the Galaxy gave her something Thanos never offered: people who valued her as more than a weapon. She's fought her own past self across timelines, a uniquely literal way of confronting who Thanos made her. Loyalty doesn't come easily to her, given how thoroughly her upbringing taught her to see relationships as competition. She's slowly rebuilt trust with Gamora and the rest of the Guardians, even as old wounds occasionally resurface. Her technical skill with machinery rivals her combat ability, both shaped by years of being treated as a project. Whatever the mission, she approaches it with a mix of hard-won loyalty and lingering suspicion.",
+    first: "The Avengers #257 (1985)", screen: { films: 5, actors: ["Karen Gillan"] } },
+  { id: "drax", name: "Drax the Destroyer", real: "Arthur Douglas / Drax", team: "Guardians", alignment: "hero",
+    powers: ["Superhuman strength", "Near-invulnerability"],
+    bio: "A vengeance-driven warrior who takes everything literally and hits everything else even harder.",
+    extra: "Joined the Guardians purely to hunt his family's killer — and stayed for the found family instead.",
+    fullBio: "Drax was once an ordinary family man before Thanos's forces destroyed his home and killed his wife and daughter. Consumed by grief and rage, he dedicated himself entirely to hunting down Thanos and anyone connected to him. His single-minded pursuit of vengeance eventually led him into an unlikely alliance with the Guardians of the Galaxy. He takes language and social cues almost entirely literally, which makes him a frequent source of unintentional humor. Beneath the blunt exterior, he's capable of deep loyalty and even deeper grief he rarely expresses directly. His strength and near-invulnerability make him one of the most physically dangerous members of the team. He formed an especially close bond with Mantis, treating her with a gentleness he shows almost no one else. Losing his family never stopped hurting, even as the Guardians slowly became a new kind of family for him. He's confronted Thanos directly more than once, driven by a grief that never fully resolved even after Thanos's death. Whatever the mission, his bluntness and his loyalty tend to arrive in equal measure.",
+    first: "Iron Man #55 (1973)", screen: { films: 4, actors: ["Dave Bautista"] } },
+  { id: "groot", name: "Groot", real: "Groot", team: "Guardians", alignment: "hero",
+    powers: ["Regeneration", "Size & body manipulation", "Plant control"],
+    bio: "A tree-like being of few words — really just one — and unwavering loyalty to his chosen family.",
+    extra: "Regrows from a single twig if destroyed, which has saved his friends' lives more than once.",
+    fullBio: "Groot is one of the last known members of his species, a tree-like being capable of regrowing from almost any injury. Despite being able to say only variations of his own name, the Guardians understand him perfectly well. His closest bond is with Rocket, a friendship that predates the Guardians as a team entirely. He's regrown from a single twig more than once, sacrificing himself to protect his friends without hesitation. His size and strength can shift dramatically, letting him serve as both gentle companion and devastating combatant. He's grown from a younger, more sapling-like form since first joining the team, alongside Rocket's care. Despite limited vocabulary, his emotional range comes through clearly to anyone who spends enough time with him. He's one of the most instantly recognizable members of the Guardians, despite saying almost nothing at all. His loyalty to the team, and especially to Rocket, has never wavered no matter how dire the threat. Whatever the situation, his willingness to sacrifice himself for his friends remains completely unshakeable.",
+    first: "Tales to Astonish #13 (1960)", screen: { films: 5, actors: ["Vin Diesel (voice)"] } },
+  { id: "mantis", name: "Mantis", real: "Mantis", team: "Guardians", alignment: "hero",
+    powers: ["Empathic touch", "Emotion manipulation"],
+    bio: "An empath who can calm — or knock out — anyone with a single touch, raised in isolation before joining the Guardians.",
+    extra: "Raised in isolation by Ego, she only discovered real friendship after joining the Guardians.",
+    fullBio: "Mantis was raised in isolation by Ego, unaware for most of her life that he was manipulating her the entire time. Her empathic touch lets her calm or incapacitate almost anyone, a power Ego used to keep his victims docile. She only discovered real friendship after the Guardians rescued her from Ego's plans and brought her into the fold. Adjusting to genuine relationships took time, given how little exposure she'd had to normal social connection. Her gentle, sometimes awkward personality contrasts sharply with the manipulation she grew up surrounded by. She formed an especially close, tender friendship with Drax, someone equally blunt in his own way. Her powers have proven crucial in high-stakes battles, subduing threats the rest of the team couldn't physically overcome. She's still learning what it means to have people who care about her without expecting anything in return. Her history with Ego occasionally resurfaces, especially in confrontations involving cosmic-scale threats. Whatever the mission, she brings a quiet, unexpectedly powerful presence to the Guardians.",
+    first: "Avengers #112 (1973)", screen: { films: 4, actors: ["Pom Klementieff"] } },
+  { id: "valkyrie", name: "Valkyrie", real: "Brunnhilde", team: "Asgard", alignment: "hero",
+    powers: ["Elite combat skill", "Winged steed", "Enhanced durability"],
+    bio: "The last of Asgard's legendary Valkyrior, drinking away a tragic past until Thor gives her a reason to fight again.",
+    extra: "The last surviving member of an all-female Asgardian order, after a battle she still carries the guilt of.",
+    fullBio: "Valkyrie was once part of an elite, all-female Asgardian order that served Odin as his personal warriors. A brutal battle against Hela wiped out nearly her entire order, leaving her the last known survivor. Guilt and grief over that loss led her to exile herself from Asgard, drowning her memories in drink for years. Thor found her on Sakaar, initially more interested in her ship than in recruiting a reluctant ally. Their partnership slowly rebuilt her sense of purpose, giving her a reason to fight again. She helped lead the survivors of Asgard's destruction toward a new home, a role she never expected to take on. Her combat skill remains among the sharpest in the Asgardian ranks, even after years of self-imposed exile. She's stepped into leadership roles she once avoided, becoming someone Asgard's remaining people could actually rely on. Her history with Hela informs almost every major decision she's made since escaping that battle. Whatever the mission, she carries both her old order's skill and its unresolved grief.",
+    first: "Avengers #83 (1970)", screen: { films: 4, actors: ["Tessa Thompson"] } },
+  { id: "hela", name: "Hela", real: "Hela", team: "Asgard", alignment: "villain",
+    powers: ["Godly strength", "Weapon conjuration", "Necromancy"],
+    bio: "Odin's banished first-born and goddess of death, who considers Asgard's throne hers by right.",
+    extra: "Was erased from Asgard's history entirely — one look at her reveals exactly why.",
+    fullBio: "Hela was Odin's first-born, once his most effective conqueror before being banished and erased from Asgard's official history. Her power outstrips both Thor and Odin himself when she's at full strength. She helped Odin expand Asgard's empire through brutal conquest, only to be imprisoned once that expansion no longer suited him. Odin's death released her from that imprisonment, and she returned to reclaim what she considered rightfully hers. She destroyed Thor's hammer with a single gesture, a demonstration of just how outmatched he was against her. Ragnarok, the prophesied destruction of Asgard, ultimately became the only way to stop her for good. Thor chose to unleash that apocalypse rather than let her seize the throne and continue her conquests. Her existence forced Asgard to reckon with a violent history it had spent generations trying to bury. She considers Asgard's throne hers by birthright, regardless of how the rest of the realm sees her. Whatever the era, her return tends to force Asgard to confront exactly what its glory was built on.",
+    first: "Journey Into Mystery #102 (1964)", screen: { films: 1, actors: ["Cate Blanchett"] } },
+  { id: "katebishop", name: "Kate Bishop", real: "Kate Bishop", team: "New Blood", alignment: "hero",
+    powers: ["Expert archery", "Elite athlete", "Detective instincts"],
+    bio: "A fiercely determined archer who talks her way into Clint Barton's life and refuses to leave.",
+    extra: "Bought a Hawkeye costume off the street and decided to become one — no super-serum required.",
+    fullBio: "Kate Bishop grew up wealthy but restless, more drawn to archery and self-defense training than to her family's social circles. Watching the Avengers battle in New York left a lasting impression on her, long before she ever met one personally. She bought a Hawkeye costume off the street and simply decided to become one, with no radioactive spider or super-serum involved. Clint Barton reluctantly took her on as a mentee after their paths crossed during a chaotic Christmas. Her sharp instincts and stubbornness quickly made her at least as capable as Clint in a fight. She's investigated family secrets that put her uncomfortably close to organized crime in her own social circle. Balancing a normal life with her new double identity has proven just as tricky for her as it was for Clint. Her partnership with Yelena Belova mixes genuine camaraderie with plenty of competitive sniping between the two of them. She's carved out her own reputation as Hawkeye's successor rather than simply his shadow. Whatever the mission, she brings a mix of confidence and improvisation that's entirely her own.",
+    first: "Vengeance #1 (2011)", screen: { films: 0, actors: ["Hailee Steinfeld"] } },
+  { id: "americachavez", name: "America Chavez", real: "America Chavez", team: "New Blood", alignment: "hero",
+    powers: ["Interdimensional star-portals", "Superhuman strength & flight"],
+    bio: "A young hero who can punch star-shaped holes between universes, wielding a power she's still learning to control.",
+    extra: "Can open portals to other universes just by kicking a star-shaped hole in the air.",
+    fullBio: "America Chavez comes from a reality known as the Utopian Parallel, raised there by two loving mothers. Her ability to punch star-shaped portals between universes set her apart from nearly every other hero she's encountered. Losing control of that power as a child sent her tumbling into the multiverse, separating her from her mothers permanently. She's spent years since then trying to master the ability well enough to choose exactly where her portals lead. Crossing paths with Doctor Strange during a multiversal crisis pulled her directly into one of the most dangerous conflicts imaginable. Her power made her a target for anyone hoping to use her ability to travel the multiverse for their own ends. Despite immense pressure, she's remained fiercely protective of other people rather than turning cynical or self-serving. She's fought alongside sorcerers, Avengers, and other multiversal wanderers over the course of her adventures. Her search for a version of home she can actually return to remains mostly unresolved. Whatever the universe, she tends to charge directly into danger rather than wait for it to pass.",
+    first: "Vengeance #1 (2011)", screen: { films: 1, actors: ["Xochitl Gomez"] } },
+  { id: "msmarvel", name: "Ms. Marvel", real: "Kamala Khan", team: "New Blood", alignment: "hero",
+    powers: ["Cosmic energy constructs", "Embiggening", "Superfan enthusiasm"],
+    bio: "A teenage superhero fan who becomes the very kind of hero she used to write fan-fiction about.",
+    extra: "A Jersey City teenager and Captain Marvel superfan who got powers of her own — and kept fangirling anyway.",
+    fullBio: "Kamala Khan grew up in Jersey City as an enormous superhero fan, especially devoted to Captain Marvel. A mysterious mist exposed her to powers she never expected, including size-shifting and the ability to form energy constructs. She took on the Ms. Marvel name as a direct tribute to the hero she'd idolized for years. Balancing her double life with a strict but loving family has been a constant source of both comedy and tension. Her enthusiasm for being a superhero never really faded, even once the reality of the job got messy. She's fought local threats in Jersey City long before ever crossing paths with the wider superhero community. Meeting Captain Marvel in person tested her ability to separate her hero from the idealized version she'd built up in her head. She's formed a close bond with other young heroes navigating powers and secret identities for the first time. Her powers have evolved since she first gained them, growing more complex and less predictable over time. Whatever the mission, she brings a level of genuine excitement most veteran heroes lost a long time ago.",
+    first: "Captain Marvel #14 (2013)", screen: { films: 1, actors: ["Iman Vellani"] } },
+  { id: "shehulk", name: "She-Hulk", real: "Jennifer Walters", team: "New Blood", alignment: "hero",
+    powers: ["Gamma-powered strength", "Enhanced durability"],
+    bio: "A sharp attorney and Bruce Banner's cousin, who keeps her wit intact even at seven feet tall and green.",
+    extra: "An attorney who specializes in superhuman-related law, which comes in handy given her own condition.",
+    fullBio: "Jennifer Walters was a successful attorney long before a blood transfusion from her cousin Bruce Banner changed her life. The transfusion, meant to save her life after a shooting, also gave her a version of the Hulk's gamma-powered strength. Unlike Bruce, she retained her personality and legal mind almost completely while transformed. She's built a career specializing in superhuman-related law, a niche practice given her own unusual condition. Balancing courtroom work with occasional Avengers-level threats has made for an unusually demanding schedule. Her sharp wit rarely disappears even at seven feet tall and green, something colleagues have learned to expect. She's mentored and worked alongside other gamma-powered individuals, including her own cousin during his more turbulent periods. Public scrutiny of superheroes affects her differently than most, given how directly it intersects with her legal work. She's occasionally frustrated by how her heroics get overshadowed by tabloid interest in her personal life. Whatever the case, she tends to approach it with the same clear-eyed practicality she brings to the courtroom.",
+    first: "The Savage She-Hulk #1 (1980)", screen: { films: 0, actors: ["Tatiana Maslany"] } },
+  { id: "yelena", name: "Yelena Belova", real: "Yelena Belova", team: "New Blood", alignment: "antihero",
+    powers: ["Elite espionage", "Widow's-bite gauntlets", "Master combatant"],
+    bio: "Another Red Room graduate who thinks of Natasha as her sister, and isn't always sure if that's a compliment.",
+    extra: "Graduated from the same Red Room program as Natasha, and still isn't sure how she feels about her 'sister.'",
+    fullBio: "Yelena Belova graduated from the same Red Room program that trained Natasha Romanoff, years after Natasha had already left. The program assigned them to pose as sisters during an early mission, a cover story that left a real emotional mark on both of them. She spent years unaware that the program had also stripped away parts of her free will through conditioning. Learning the truth about that manipulation turned her fiercely against the people who'd trained her. She still isn't always sure how she feels about calling Natasha her sister, even after everything. Natasha's death hit her harder than she expected, complicating a relationship she'd spent years being sarcastic about. She's taken up dismantling the remains of the Red Room's network, partly out of duty and partly out of grief. Her combat skills rival Natasha's, sharpened by a training program built to be even more brutal than the one before her. She's formed an unexpectedly genuine friendship with Kate Bishop, despite constant bickering between the two. Whatever the mission, she carries both real loyalty and real difficulty admitting it out loud.",
+    first: "Inhumans #5 (1999)", screen: { films: 2, actors: ["Florence Pugh"] } },
+  { id: "killmonger", name: "Killmonger", real: "Erik Stevens", team: "Villains", alignment: "villain",
+    powers: ["Black ops training", "Vibranium weaponry"],
+    bio: "T'Challa's exiled cousin, hardened by a childhood outside Wakanda into someone determined to burn its isolation down.",
+    extra: "Grew up in Oakland, cut off from Wakanda, and channeled that resentment into a plan to seize its throne.",
+    fullBio: "Erik Stevens grew up in Oakland after his father, T'Challa's uncle, was killed and Wakanda cut off contact with him permanently. Abandoned by the nation that should have been his birthright, he grew up in poverty, resentment, and eventually black ops training. That military background made him one of the most capable and ruthless fighters T'Challa had ever faced. He returned to Wakanda determined to seize the throne and use its resources to arm oppressed people around the world. His plan wasn't purely selfish; it grew from genuine anger at Wakanda's isolationist policies leaving people like him to suffer. Challenging T'Challa for the throne exposed uncomfortable truths about Wakanda's history that the nation had avoided confronting for years. His death ultimately pushed T'Challa to open Wakanda to the outside world, fulfilling part of what Erik wanted. Despite being framed as a villain, his critique of Wakanda's choices left a lasting mark on the nation's policies. His relationship to the throne was legitimate by blood, a fact that complicates any simple hero-villain reading of him. Whatever the framing, his story remains one of the more personal tragedies in Wakanda's history.",
+    first: "Jungle Action #6 (1973)", screen: { films: 1, actors: ["Michael B. Jordan"] } },
+  { id: "kang", name: "Kang the Conqueror", real: "Nathaniel Richards", team: "Villains", alignment: "villain",
+    powers: ["Time travel", "Advanced weaponry", "Infinite variants"],
+    bio: "A time-traveling conqueror with countless versions of himself scattered across the timeline — and plans for all of them.",
+    extra: "Different versions of himself exist across the timeline, and not all of them get along.",
+    fullBio: "Nathaniel Richards discovered time travel technology and used it to conquer countless eras across history under the name Kang. Different versions of himself exist simultaneously across the timeline, the result of centuries of branching decisions and conquests. Not all of those versions get along, and some have fought each other as fiercely as they've fought any hero. One variant lived a quiet, isolated existence at the end of time before his death threatened to unleash countless worse versions of himself. Ant-Man and the Wasp encountered him trapped in the Quantum Realm, unaware at first of exactly what they were dealing with. His mastery of advanced weaponry and strategy make him a threat capable of outmatching entire teams of heroes at once. He views individual timelines as expendable, a perspective that makes him uniquely dangerous compared to more grounded villains. Different variants have posed as conquerors, scientists, and even reluctant protectors, depending on the branch of reality involved. His multiversal reach means a single defeat rarely means the threat is actually over. Whatever the timeline, some version of Kang is very likely already making plans.",
+    first: "Fantastic Four #19 (1963)", screen: { films: 1, actors: ["Jonathan Majors"] } },
+  { id: "ronan", name: "Ronan the Accuser", real: "Ronan", team: "Villains", alignment: "villain",
+    powers: ["Universal Weapon", "Superhuman strength", "Kree military command"],
+    bio: "A zealous Kree military commander convinced total war is the only cure for his people's enemies.",
+    extra: "Broke a peace treaty with Xandar on his own authority, convinced his people needed no diplomacy at all.",
+    fullBio: "Ronan the Accuser served as a top military commander within the Kree Empire, tasked with enforcing its laws with brutal efficiency. He broke a peace treaty between the Kree and the planet Xandar on his own authority, convinced diplomacy had failed his people. His alliance with Thanos gave him access to power he intended to use to annihilate Xandar entirely. Wielding a Kree artifact known as the Universal Weapon, he became powerful enough to threaten an entire planet single-handedly. The Guardians of the Galaxy formed specifically in response to the threat he posed during that campaign. His zealotry left little room for negotiation, viewing total war as the only acceptable response to his people's enemies. He briefly commanded forces alongside Thanos, though his ambitions were ultimately his own rather than simple obedience. His defeat at the hands of the Guardians marked one of their first major victories as a team. He remains one of the more direct examples of Kree militarism taken to its most extreme conclusion. Whatever the campaign, his methods rarely left room for anything short of total victory.",
+    first: "Fantastic Four #65 (1967)", screen: { films: 1, actors: ["Lee Pace"] } },
+  { id: "ego", name: "Ego", real: "Ego the Living Planet", team: "Villains", alignment: "villain",
+    powers: ["Planetary-scale reality manipulation", "Shapeshifting matter"],
+    bio: "A living planet with a human avatar and a galaxy-spanning plan — one that has no room for anyone but himself.",
+    extra: "Spent millennia seeding planets with copies of himself, planning a takeover on a cosmic scale.",
+    fullBio: "Ego is a Celestial being, effectively a living planet with a human-like avatar he uses to interact with the galaxy. He spent millennia seeding other planets with copies of himself, part of a plan he called the Expansion. Fathering children across the galaxy, including Peter Quill, was part of that plan, meant to give him enough power to finish it. He posed as a loving father to Peter, hiding his true intentions until it was almost too late. His plan required consuming or overwriting every other form of life in the universe with a version of himself. Mantis, raised by him for years, was manipulated into believing his affection for her was genuine. Discovering the truth about his father's plan devastated Peter, who had spent his whole life wanting exactly this kind of connection. The Guardians ultimately stopped his plan, though the emotional damage to Peter and Mantis lingered long after. His scale of ambition remains almost incomprehensible compared to even other cosmic-level threats. Whatever the era, his core motivation never wavers: a galaxy remade entirely in his own image.",
+    first: "Thor #132 (1966)", screen: { films: 1, actors: ["Kurt Russell"] } },
+  { id: "modok", name: "M.O.D.O.K.", real: "George Tarleton", team: "Villains", alignment: "villain",
+    powers: ["Psionic blasts", "Genius intellect", "Hover-chair mobility"],
+    bio: "A lab technician turned into a giant-headed bio-weapon by the organization he used to work for.",
+    extra: "Was a low-level lab technician before an experiment turned him into a floating, oversized head with a grudge.",
+    fullBio: "George Tarleton was a low-level lab technician working for a criminal organization researching ways to enhance human cognition. An experiment meant to create the ultimate strategist instead transformed him into a giant, floating head with a body barely able to support it. The organization that created him considered him a tool rather than a person, a betrayal he's never forgiven. His hover-chair mobility and psionic abilities make up for his physically limited body in combat situations. Bitter and resentful, he channels his genius intellect into elaborate, often overly complicated schemes for revenge and power. He's clashed with a wide range of heroes, from street-level vigilantes to full Avengers lineups. Despite his intimidating appearance, he's frequently undercut by his own ego and tendency to overexplain his plans. His origins as a discarded lab experiment give him a strange, occasionally sympathetic edge beneath the villainy. He's rebuilt or reinvented his organization and his plans multiple times after repeated defeats. Whatever the scheme, his genius and his grudges tend to be inseparable.",
+    first: "Tales of Suspense #93 (1967)", screen: { films: 1, actors: ["Corey Stoll (voice/mo-cap)"] } },
+  { id: "shangchi", name: "Shang-Chi", real: "Shaun / Shang-Chi", team: "New Blood", alignment: "hero",
+    powers: ["Master martial artist", "Ten Rings mastery"],
+    bio: "Trained since childhood by his father to be a weapon, he chooses instead to become his family's toughest opponent.",
+    extra: "Trained from childhood to lead a criminal organization, and walked away from it instead.",
+    fullBio: "Shang-Chi was trained from early childhood by his father to become a lethal weapon for the family's criminal organization. Years of martial arts discipline made him one of the most capable hand-to-hand fighters in the world by the time he was an adult. He walked away from that life once he understood the full scope of what his father's organization actually did. Building an ordinary life in San Francisco let him avoid his past for years, working as a valet and keeping a low profile. His father's mystical rings, an ancient source of power, eventually pulled him back into a family conflict he'd tried to escape. Confronting his father meant reckoning with both his mother's death and the violent legacy he'd been raised to inherit. His sister Xialing had built her own path separately, having been overlooked by their father in ways that shaped her just as deeply. Mastering the Ten Rings' power meant accepting parts of his family's legacy rather than rejecting all of it outright. He's since been drawn into wider conflicts involving other powerful factions interested in his family's ancient rings. Whatever the fight, he brings discipline built from a childhood he spent most of his life trying to leave behind.",
+    first: "Special Marvel Edition #15 (1973)", screen: { films: 1, actors: ["Simu Liu"] } },
+  { id: "moonknight", name: "Moon Knight", real: "Marc Spector", team: "New Blood", alignment: "antihero",
+    powers: ["Egyptian-god-granted strength", "Multiple identities", "Combat training"],
+    bio: "A mercenary-turned-avatar of an Egyptian moon god, sharing his body and his mission with more than one personality.",
+    extra: "Shares his body with multiple personalities, each with a different relationship to the god who empowers him.",
+    fullBio: "Marc Spector was a mercenary and former Marine whose life changed after he was left for dead in the Egyptian desert. The ancient god Khonshu offered to save his life in exchange for becoming his avatar on Earth. That bargain gave Marc enhanced strength and healing, alongside a mission he never fully agreed to sign up for. He shares his body and his mission with more than one distinct personality, each shaped by different parts of his past. Steven Grant, a mild-mannered persona with no memory of Marc's violent history, coexists uneasily inside the same body. Managing that condition has made even ordinary life extremely difficult, let alone a career built around violence and secrecy. Khonshu's demands are rarely gentle, treating Marc more as a tool for justice than as a person with his own needs. His marriage, complicated by his condition and his double life, has been a source of both support and enormous strain. He's clashed directly with Khonshu's authority more than once, questioning how much of his life is actually his own. Whatever the mission, the line between Marc, Steven, and whichever other personality is active rarely stays clear for long.",
+    first: "Werewolf by Night #32 (1975)", screen: { films: 0, actors: ["Oscar Isaac"] } },
+  { id: "wong", name: "Wong", real: "Wong", team: "Avengers", alignment: "hero",
+    powers: ["Mystic arts mastery", "Martial arts", "Keeper of forbidden knowledge"],
+    bio: "Doctor Strange's steadiest ally and eventual Sorcerer Supreme, more disciplined and far less reckless than his old friend.",
+    extra: "The most disciplined sorcerer at Kamar-Taj, and the one usually left cleaning up after Doctor Strange.",
+    fullBio: "Wong trained for years at Kamar-Taj, mastering the mystic arts with far more discipline than his eventual closest ally, Stephen Strange. He served as librarian and enforcer of the mystical order's rules long before rising to its highest rank. His steady, no-nonsense temperament makes him the perfect counterbalance to Doctor Strange's impulsiveness. He's cleaned up after more of Strange's reckless decisions than he'd probably care to count. Becoming Sorcerer Supreme placed enormous responsibility on him, tasked with protecting Earth from threats most people never even notice. He's fought and negotiated with beings from other dimensions, other timelines, and occasionally other versions of his own allies. His friendship with America Chavez and Shang-Chi shows a warmer, more mentoring side beneath his usual formality. He rarely seeks credit for the threats he quietly manages behind the scenes. His discipline has occasionally put him at direct odds with more chaotic allies, including a version of Scarlet Witch during a multiversal crisis. Whatever the threat, he approaches it with a level head that Kamar-Taj clearly trained into him early.",
+    first: "Strange Tales #110 (1963)", screen: { films: 6, actors: ["Benedict Wong"] } },
+];
+
+const RELATIONSHIPS = [
+  { a: "ironman", b: "cap", type: "team" },
+  { a: "ironman", b: "thor", type: "team" },
+  { a: "ironman", b: "spiderman", type: "ally" },
+  { a: "cap", b: "blackwidow", type: "team" },
+  { a: "cap", b: "hawkeye", type: "team" },
+  { a: "hawkeye", b: "blackwidow", type: "ally" },
+  { a: "hulk", b: "cap", type: "team" },
+  { a: "hulk", b: "thor", type: "team" },
+  { a: "thor", b: "loki", type: "family" },
+  { a: "thor", b: "thanos", type: "enemy" },
+  { a: "loki", b: "thanos", type: "ally" },
+  { a: "thanos", b: "gamora", type: "family" },
+  { a: "gamora", b: "starlord", type: "team" },
+  { a: "starlord", b: "rocket", type: "team" },
+  { a: "rocket", b: "gamora", type: "team" },
+  { a: "thanos", b: "starlord", type: "enemy" },
+  { a: "thanos", b: "ironman", type: "enemy" },
+  { a: "wolverine", b: "cyclops", type: "team" },
+  { a: "cyclops", b: "jeangrey", type: "family" },
+  { a: "jeangrey", b: "professorx", type: "ally" },
+  { a: "professorx", b: "magneto", type: "enemy" },
+  { a: "storm", b: "professorx", type: "team" },
+  { a: "wolverine", b: "storm", type: "team" },
+  { a: "professorx", b: "wolverine", type: "team" },
+  { a: "reed", b: "sue", type: "family" },
+  { a: "sue", b: "torch", type: "family" },
+  { a: "reed", b: "torch", type: "team" },
+  { a: "reed", b: "thing", type: "team" },
+  { a: "sue", b: "thing", type: "team" },
+  { a: "torch", b: "thing", type: "team" },
+  { a: "reed", b: "doom", type: "enemy" },
+  { a: "reed", b: "ironman", type: "ally" },
+  { a: "reed", b: "galactus", type: "enemy" },
+  { a: "blackpanther", b: "shuri", type: "family" },
+  { a: "blackpanther", b: "okoye", type: "team" },
+  { a: "shuri", b: "okoye", type: "team" },
+  { a: "blackpanther", b: "cap", type: "ally" },
+  { a: "captainmarvel", b: "ironman", type: "team" },
+  { a: "captainmarvel", b: "cap", type: "team" },
+  { a: "silversurfer", b: "galactus", type: "ally" },
+  { a: "silversurfer", b: "captainmarvel", type: "ally" },
+  { a: "daredevil", b: "punisher", type: "ally" },
+  { a: "daredevil", b: "kingpin", type: "enemy" },
+  { a: "kingpin", b: "punisher", type: "enemy" },
+  { a: "deadpool", b: "wolverine", type: "ally" },
+  { a: "venom", b: "spiderman", type: "enemy" },
+  { a: "drstrange", b: "scarletwitch", type: "ally" },
+  { a: "drstrange", b: "ironman", type: "ally" },
+  { a: "scarletwitch", b: "vision", type: "family" },
+  { a: "vision", b: "ironman", type: "ally" },
+  { a: "vision", b: "ultron", type: "enemy" },
+  { a: "antman", b: "cap", type: "team" },
+  { a: "falcon", b: "cap", type: "ally" },
+  { a: "falcon", b: "blackwidow", type: "team" },
+  { a: "beast", b: "cyclops", type: "team" },
+  { a: "beast", b: "professorx", type: "team" },
+  { a: "nightcrawler", b: "wolverine", type: "team" },
+  { a: "rogue", b: "wolverine", type: "ally" },
+  { a: "mystique", b: "magneto", type: "ally" },
+  { a: "mystique", b: "professorx", type: "enemy" },
+  { a: "mystique", b: "rogue", type: "family" },
+  { a: "doom", b: "ironman", type: "enemy" },
+  { a: "greengoblin", b: "spiderman", type: "enemy" },
+  { a: "ultron", b: "ironman", type: "enemy" },
+  { a: "fury", b: "cap", type: "ally" },
+  { a: "fury", b: "blackwidow", type: "ally" },
+  { a: "fury", b: "captainmarvel", type: "ally" },
+  { a: "warmachine", b: "ironman", type: "ally" },
+  { a: "warmachine", b: "cap", type: "team" },
+  { a: "wintersoldier", b: "cap", type: "family" },
+  { a: "wintersoldier", b: "blackwidow", type: "ally" },
+  { a: "nebula", b: "gamora", type: "family" },
+  { a: "nebula", b: "thanos", type: "family" },
+  { a: "drax", b: "starlord", type: "team" },
+  { a: "drax", b: "gamora", type: "team" },
+  { a: "groot", b: "rocket", type: "ally" },
+  { a: "groot", b: "starlord", type: "team" },
+  { a: "mantis", b: "starlord", type: "team" },
+  { a: "mantis", b: "drax", type: "team" },
+  { a: "valkyrie", b: "thor", type: "ally" },
+  { a: "hela", b: "thor", type: "family" },
+  { a: "hela", b: "loki", type: "family" },
+  { a: "katebishop", b: "hawkeye", type: "ally" },
+  { a: "katebishop", b: "yelena", type: "ally" },
+  { a: "americachavez", b: "drstrange", type: "ally" },
+  { a: "americachavez", b: "wong", type: "ally" },
+  { a: "msmarvel", b: "captainmarvel", type: "ally" },
+  { a: "shehulk", b: "hulk", type: "family" },
+  { a: "yelena", b: "blackwidow", type: "family" },
+  { a: "killmonger", b: "blackpanther", type: "enemy" },
+  { a: "killmonger", b: "blackpanther", type: "family" },
+  { a: "kang", b: "antman", type: "enemy" },
+  { a: "ronan", b: "starlord", type: "enemy" },
+  { a: "ronan", b: "thanos", type: "ally" },
+  { a: "ego", b: "starlord", type: "family" },
+  { a: "ego", b: "starlord", type: "enemy" },
+  { a: "modok", b: "antman", type: "enemy" },
+  { a: "shangchi", b: "wong", type: "ally" },
+  { a: "moonknight", b: "drstrange", type: "ally" },
+  { a: "wong", b: "drstrange", type: "team" },
+  { a: "wong", b: "scarletwitch", type: "enemy" },
+];
+
+const REL_STYLE = {
+  family: { color: "#EC4899", dash: "0", width: 3, label: "Family" },
+  team: { color: "#64748B", dash: "0", width: 1.5, label: "Team" },
+  ally: { color: "#16A34A", dash: "6,4", width: 1.5, label: "Ally" },
+  enemy: { color: "#DC2626", dash: "2,3", width: 2, label: "Enemy" },
+};
+
+const byId = Object.fromEntries(CHARACTERS.map((c) => [c.id, c]));
+
+// Graph edges: drop "ally" everywhere EXCEPT for characters who would
+// otherwise be stranded with zero family/team/enemy connections — ally ties
+// are kept only as a fallback so no one is left floating with no links at all.
+const PRIMARY_RELATIONSHIPS = RELATIONSHIPS.filter((r) => r.type !== "ally");
+const connectedInPrimary = new Set();
+PRIMARY_RELATIONSHIPS.forEach((r) => {
+  connectedInPrimary.add(r.a);
+  connectedInPrimary.add(r.b);
+});
+const FALLBACK_ALLY = RELATIONSHIPS.filter(
+  (r) => r.type === "ally" && (!connectedInPrimary.has(r.a) || !connectedInPrimary.has(r.b))
+);
+const GRAPH_RELATIONSHIPS = [...PRIMARY_RELATIONSHIPS, ...FALLBACK_ALLY];
+
+const ADJACENCY = {};
+GRAPH_RELATIONSHIPS.forEach((r) => {
+  (ADJACENCY[r.a] = ADJACENCY[r.a] || []).push({ id: r.b, type: r.type });
+  (ADJACENCY[r.b] = ADJACENCY[r.b] || []).push({ id: r.a, type: r.type });
+});
+
+function getNeighborhood(id, maxDepth = 2) {
+  if (!id || !byId[id]) return { nodeIds: [], depth: {}, edges: [] };
+  const depth = { [id]: 0 };
+  const queue = [id];
+  while (queue.length) {
+    const cur = queue.shift();
+    const d = depth[cur];
+    if (d >= maxDepth) continue;
+    (ADJACENCY[cur] || []).forEach(({ id: nid }) => {
+      if (!(nid in depth)) {
+        depth[nid] = d + 1;
+        queue.push(nid);
+      }
+    });
+  }
+  const nodeIds = Object.keys(depth);
+  const nodeSet = new Set(nodeIds);
+  const edges = GRAPH_RELATIONSHIPS.filter((r) => nodeSet.has(r.a) && nodeSet.has(r.b));
+  return { nodeIds, depth, edges };
+}
+
+const QUICK_PICKS = ["ironman", "thanos", "wolverine", "blackpanther", "starlord", "doom", "captainmarvel", "loki"];
+const GRAPH_W = 900;
+const GRAPH_H = 680;
+
+// ---------------------------------------------------------------------------
+
+function initialsOf(name) {
+  return name
+    .split(" ")
+    .filter((w) => w[0] === w[0].toUpperCase())
+    .map((w) => w[0])
+    .join("")
+    .slice(0, 2);
+}
+
+function filmsLabel(screen) {
+  if (screen.films === 0) return "TV/streaming only";
+  return `${screen.films} film${screen.films === 1 ? "" : "s"}`;
+}
+
+function Card({ char, onSelect }) {
+  const team = TEAMS[char.team];
+  const AlignIcon = ALIGN_ICON[char.alignment];
+  return (
+    <button
+      onClick={() => onSelect(char.id)}
+      className="text-left w-full rounded-xl overflow-hidden flex flex-col bg-[#FBF7EE] transition-transform hover:-translate-y-1 hover:shadow-xl"
+      style={{ border: `3px solid #14151A`, boxShadow: "4px 4px 0 #14151A", width: "100%", boxSizing: "border-box" }}
+    >
+      <div
+        className="flex items-center gap-3 p-3 w-full"
+        style={{ background: `${team.color}22`, borderBottom: "3px solid #14151A", width: "100%", boxSizing: "border-box" }}
+      >
+        <div
+          className="rounded-full flex items-center justify-center shrink-0"
+          style={{
+            width: 56,
+            height: 56,
+            backgroundImage: `radial-gradient(circle at 30% 30%, ${team.color}, ${team.ink}), repeating-radial-gradient(circle, #ffffff33 0, #ffffff33 1px, transparent 1.5px, transparent 5px)`,
+            boxShadow: "inset 0 0 0 3px #14151A",
+          }}
+        >
+          <span className="font-black text-white" style={{ fontFamily: "'Bangers', cursive", fontSize: 20, textShadow: "0 1px 0 #14151A" }}>
+            {initialsOf(char.name)}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <div className="uppercase font-black tracking-wide truncate" style={{ fontFamily: "'Bangers', cursive", fontSize: 22, color: "#14151A" }}>
+            {char.name}
+          </div>
+          <div className="text-xs truncate" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#4B4B4B" }}>
+            {char.real}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-3 flex-1 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <span
+            className="text-[11px] font-bold uppercase px-2 py-0.5 rounded-full text-white"
+            style={{ background: team.color, fontFamily: "'Barlow Condensed', sans-serif", letterSpacing: 0.5 }}
+          >
+            {char.team}
+          </span>
+          <span className="flex items-center gap-1 text-[11px] font-bold uppercase" style={{ color: team.ink, fontFamily: "'Barlow Condensed', sans-serif" }}>
+            <AlignIcon size={12} strokeWidth={2.5} /> {char.alignment}
+          </span>
+        </div>
+
+        <p className="text-sm leading-snug" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#242424" }}>
+          {char.bio}
+        </p>
+
+        <div className="flex flex-wrap gap-1 mt-auto pt-1">
+          {char.powers.map((p) => (
+            <span
+              key={p}
+              className="text-[10px] px-1.5 py-0.5 rounded border"
+              style={{ borderColor: "#14151A", fontFamily: "'Barlow Condensed', sans-serif", color: "#14151A" }}
+            >
+              {p}
+            </span>
+          ))}
+        </div>
+
+        <div className="text-[10px] pt-1 border-t mt-1 flex flex-col gap-0.5" style={{ borderColor: "#14151A33", fontFamily: "'Barlow Condensed', sans-serif", color: "#6B6B6B" }}>
+          <span>First appearance: {char.first}</span>
+          <span className="flex items-center gap-1"><Film size={10} /> {filmsLabel(char.screen)} · {char.screen.actors.length} actor{char.screen.actors.length === 1 ? "" : "s"}</span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function DetailPanel({ id, onClose, onJump, onViewWeb }) {
+  if (!id) return null;
+  const char = byId[id];
+  const team = TEAMS[char.team];
+  const links = RELATIONSHIPS.filter((r) => r.a === id || r.b === id).map((r) => {
+    const otherId = r.a === id ? r.b : r.a;
+    return { other: byId[otherId], type: r.type };
+  });
+
+  return (
+    <div className="fixed inset-0 z-30 flex items-center justify-center p-4" style={{ background: "#14151Acc" }} onClick={onClose}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-md rounded-xl overflow-hidden flex flex-col"
+        style={{ background: "#FBF7EE", border: "3px solid #14151A", boxShadow: "6px 6px 0 #14151A", maxHeight: "85vh" }}
+      >
+        <div className="flex items-start justify-between p-4" style={{ background: `${team.color}33`, borderBottom: "3px solid #14151A" }}>
+          <div className="flex items-center gap-3">
+            <div
+              className="rounded-full flex items-center justify-center shrink-0"
+              style={{ width: 64, height: 64, background: `radial-gradient(circle at 30% 30%, ${team.color}, ${team.ink})`, boxShadow: "inset 0 0 0 3px #14151A" }}
+            >
+              <span className="font-black text-white" style={{ fontFamily: "'Bangers', cursive", fontSize: 22 }}>{initialsOf(char.name)}</span>
+            </div>
+            <div>
+              <div className="uppercase font-black" style={{ fontFamily: "'Bangers', cursive", fontSize: 26, color: "#14151A" }}>{char.name}</div>
+              <div className="text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#4B4B4B" }}>{char.real}</div>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1 rounded hover:bg-black/10"><X size={20} /></button>
+        </div>
+        <div className="p-4 overflow-y-auto" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+          <p className="text-sm mb-3" style={{ color: "#242424" }}>{char.fullBio}</p>
+
+          <div className="text-xs font-bold uppercase mb-1.5" style={{ color: "#6B6B6B" }}>On Screen</div>
+          <div className="rounded-lg p-2.5 mb-3" style={{ border: "2px solid #14151A22", background: "#ffffff80" }}>
+            <div className="flex items-center gap-1.5 text-sm font-semibold mb-1" style={{ color: "#14151A" }}>
+              <Film size={13} /> {filmsLabel(char.screen)}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {char.screen.actors.map((a) => (
+                <span key={a} className="text-[11px] px-1.5 py-0.5 rounded border" style={{ borderColor: "#14151A33", color: "#242424" }}>
+                  {a}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="text-xs font-bold uppercase mb-1" style={{ color: "#6B6B6B" }}>Connections</div>
+          <div className="flex flex-col gap-1.5 mb-3">
+            {links.length === 0 && <div className="text-sm text-gray-500">No tracked connections yet.</div>}
+            {links.map(({ other, type }) => {
+              const style = REL_STYLE[type];
+              return (
+                <button
+                  key={other.id + type}
+                  onClick={() => onJump(other.id)}
+                  className="flex items-center justify-between gap-2 text-left px-2 py-1.5 rounded border hover:bg-black/5"
+                  style={{ borderColor: "#14151A33" }}
+                >
+                  <span className="text-sm font-semibold" style={{ color: "#14151A" }}>{other.name}</span>
+                  <span
+                    className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded-full text-white"
+                    style={{ background: style.color }}
+                  >
+                    {style.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => onViewWeb(id)}
+            className="w-full text-center text-sm font-bold uppercase py-2 rounded-lg"
+            style={{ fontFamily: "'Barlow Condensed', sans-serif", border: "2px solid #14151A", color: "#14151A" }}
+          >
+            See relationship web →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="flex flex-wrap gap-3 items-center text-xs" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+      {Object.entries(REL_STYLE).map(([k, s]) => (
+        <div key={k} className="flex items-center gap-1.5">
+          <svg width="24" height="8"><line x1="0" y1="4" x2="24" y2="4" stroke={s.color} strokeWidth={s.width} strokeDasharray={s.dash} /></svg>
+          <span className="font-semibold" style={{ color: "#14151A" }}>{s.label}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function WebView({ teamFilter, focusId, onFocus, onOpenDetail, query, searchMatches }) {
+  const svgRef = useRef(null);
+  const gRef = useRef(null);
+  const zoomRef = useRef(null);
+
+  const { nodeIds, depth, edges } = useMemo(() => getNeighborhood(focusId, 2), [focusId]);
+
+  const layout = useMemo(() => {
+    if (!nodeIds.length) return { nodes: [], links: [] };
+    const nodes = nodeIds.map((id, i) => {
+      const d = depth[id];
+      const angle = (i / nodeIds.length) * Math.PI * 2 + d * 0.4;
+      const radius = d === 0 ? 0 : d === 1 ? 150 : 300;
+      const jitter = () => (Math.random() - 0.5) * 24;
+      return { ...byId[id], depth: d, x: GRAPH_W / 2 + Math.cos(angle) * radius + jitter(), y: GRAPH_H / 2 + Math.sin(angle) * radius + jitter() };
+    });
+    const links = edges.map((r) => ({ source: r.a, target: r.b, type: r.type }));
+    const sim = d3
+      .forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id((d) => d.id).distance((l) => (l.type === "family" ? 90 : 130)).strength(0.7))
+      .force("charge", d3.forceManyBody().strength(-320))
+      .force("center", d3.forceCenter(GRAPH_W / 2, GRAPH_H / 2))
+      .force("collide", d3.forceCollide((d) => (d.depth === 0 ? 60 : d.depth === 1 ? 50 : 42)).strength(0.95).iterations(3))
+      .stop();
+    for (let i = 0; i < 400; i++) sim.tick();
+    return { nodes, links };
+  }, [nodeIds, depth, edges]);
+
+  // set up zoom/pan once
+  useEffect(() => {
+    const svg = d3.select(svgRef.current);
+    const zoomB = d3.zoom().scaleExtent([0.4, 3.5]).on("zoom", (event) => {
+      d3.select(gRef.current).attr("transform", event.transform);
+    });
+    svg.call(zoomB);
+    zoomRef.current = zoomB;
+    return () => svg.on(".zoom", null);
+  }, []);
+
+  const fitToContent = useCallback(() => {
+    if (!layout.nodes.length || !svgRef.current || !zoomRef.current) return;
+    const pad = 80;
+    const xs = layout.nodes.map((n) => n.x);
+    const ys = layout.nodes.map((n) => n.y);
+    const minX = Math.min(...xs) - pad, maxX = Math.max(...xs) + pad;
+    const minY = Math.min(...ys) - pad, maxY = Math.max(...ys) + pad;
+    const w = Math.max(maxX - minX, 120), h = Math.max(maxY - minY, 120);
+    const scale = Math.min(GRAPH_W / w, GRAPH_H / h, 2.4);
+    const tx = GRAPH_W / 2 - scale * (minX + maxX) / 2;
+    const ty = GRAPH_H / 2 - scale * (minY + maxY) / 2;
+    d3.select(svgRef.current).transition().duration(450).call(zoomRef.current.transform, d3.zoomIdentity.translate(tx, ty).scale(scale));
+  }, [layout]);
+
+  useEffect(() => {
+    fitToContent();
+  }, [fitToContent]);
+
+  const zoomBy = (factor) => {
+    if (!zoomRef.current) return;
+    d3.select(svgRef.current).transition().duration(200).call(zoomRef.current.scaleBy, factor);
+  };
+
+  const focusChar = focusId ? byId[focusId] : null;
+
+  return (
+    <div className="rounded-xl p-3" style={{ background: "#FBF7EE", border: "3px solid #14151A", boxShadow: "4px 4px 0 #14151A" }}>
+      <div className="flex items-center justify-between mb-2 px-1 flex-wrap gap-2">
+        <Legend />
+        {focusChar && (
+          <div className="text-xs font-bold uppercase" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#14151A" }}>
+            Centered on {focusChar.name} · 2 degrees
+          </div>
+        )}
+      </div>
+
+      {query && searchMatches && searchMatches.length > 0 && (
+        <div className="mb-2 rounded-lg overflow-hidden" style={{ border: "2px solid #14151A" }}>
+          {searchMatches.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => onFocus(c.id)}
+              className="w-full text-left px-3 py-1.5 text-sm hover:bg-black/5 flex items-center justify-between"
+              style={{ fontFamily: "'Barlow Condensed', sans-serif", borderBottom: "1px solid #14151A22" }}
+            >
+              <span className="font-semibold" style={{ color: "#14151A" }}>{c.name}</span>
+              <span className="text-[10px] uppercase" style={{ color: "#6B6B6B" }}>{c.team}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="relative rounded-lg overflow-hidden" style={{ background: "#DED2B5" }}>
+        {layout.nodes.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 py-16 px-4 text-center" style={{ minHeight: "40vh" }}>
+            <div className="text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#4B4B4B" }}>
+              Search a name above, or open a card and tap "See relationship web," to explore two degrees of connections here.
+            </div>
+            <div className="flex flex-wrap gap-1.5 justify-center max-w-sm">
+              {QUICK_PICKS.map((id) => (
+                <button
+                  key={id}
+                  onClick={() => onFocus(id)}
+                  className="text-[11px] font-bold uppercase px-2.5 py-1 rounded-full"
+                  style={{ fontFamily: "'Barlow Condensed', sans-serif", border: "2px solid #14151A", background: "#FBF7EE", color: "#14151A" }}
+                >
+                  {byId[id].name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <svg
+              ref={svgRef}
+              viewBox={`0 0 ${GRAPH_W} ${GRAPH_H}`}
+              className="w-full"
+              style={{ height: "58vh", touchAction: "none", cursor: "grab" }}
+            >
+              <g ref={gRef}>
+                {layout.links.map((l, i) => {
+                  const s = REL_STYLE[l.type];
+                  const aFiltered = teamFilter && l.source.team !== teamFilter;
+                  const bFiltered = teamFilter && l.target.team !== teamFilter;
+                  return (
+                    <line
+                      key={i}
+                      x1={l.source.x} y1={l.source.y} x2={l.target.x} y2={l.target.y}
+                      stroke={s.color} strokeWidth={s.width} strokeDasharray={s.dash}
+                      opacity={aFiltered || bFiltered ? 0.15 : 0.85}
+                    />
+                  );
+                })}
+                {layout.nodes.map((n) => {
+                  const team = TEAMS[n.team];
+                  const r = n.depth === 0 ? 32 : n.depth === 1 ? 24 : 18;
+                  const dim = teamFilter && n.team !== teamFilter;
+                  return (
+                    <g key={n.id} opacity={dim ? 0.3 : 1} style={{ cursor: "pointer" }} onClick={() => (n.id === focusId ? onOpenDetail(n.id) : onFocus(n.id))}>
+                      <circle
+                        cx={n.x} cy={n.y} r={r}
+                        fill={team.color}
+                        stroke={n.depth === 0 ? "#F0B429" : "#14151A"}
+                        strokeWidth={n.depth === 0 ? 4 : 2}
+                      />
+                      <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize={n.depth === 0 ? 13 : 10} fontWeight={800} fill="#fff" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {initialsOf(n.name)}
+                      </text>
+                      <text x={n.x} y={n.y + r + 14} textAnchor="middle" fontSize={n.depth === 0 ? 13 : 11} fontWeight={700} fill="#14151A" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                        {n.name}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            </svg>
+            <div className="absolute top-2 right-2 flex flex-col gap-1 rounded-lg overflow-hidden" style={{ border: "2px solid #14151A", background: "#FBF7EE" }}>
+              <button onClick={() => zoomBy(1.4)} className="p-1.5 hover:bg-black/5" title="Zoom in"><ZoomIn size={15} /></button>
+              <button onClick={() => zoomBy(1 / 1.4)} className="p-1.5 hover:bg-black/5 border-t" style={{ borderColor: "#14151A22" }} title="Zoom out"><ZoomOut size={15} /></button>
+              <button onClick={fitToContent} className="p-1.5 hover:bg-black/5 border-t" style={{ borderColor: "#14151A22" }} title="Fit to view"><Maximize2 size={15} /></button>
+            </div>
+          </>
+        )}
+      </div>
+      <div className="text-xs text-center mt-2" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#6B6B6B" }}>
+        Tap a ring node to re-center on it, or the middle node to open its full profile. Pinch or scroll to zoom, drag to pan.
+      </div>
+    </div>
+  );
+}
+
+function MarvelDeck() {
+  const [query, setQuery] = useState("");
+  const [teamFilter, setTeamFilter] = useState(null);
+  const [view, setView] = useState("cards"); // cards | web
+  const [selectedId, setSelectedId] = useState(null);
+  const [focusId, setFocusId] = useState(null);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return CHARACTERS.filter((c) => {
+      const matchesQuery =
+        !q ||
+        c.name.toLowerCase().includes(q) ||
+        c.real.toLowerCase().includes(q) ||
+        c.team.toLowerCase().includes(q) ||
+        c.powers.some((p) => p.toLowerCase().includes(q));
+      const matchesTeam = !teamFilter || c.team === teamFilter;
+      return matchesQuery && matchesTeam;
+    });
+  }, [query, teamFilter]);
+
+  const searchMatches = useMemo(() => filtered.slice(0, 6), [filtered]);
+
+  const viewInWeb = (id) => {
+    setFocusId(id);
+    setView("web");
+    setSelectedId(null);
+  };
+
+  return (
+    <div className="min-h-screen w-full" style={{ background: "#EFE7D6" }}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Barlow+Condensed:wght@400;600;700;800&display=swap');
+      `}</style>
+
+      <div
+        className="px-4 pt-6 pb-4"
+        style={{
+          backgroundImage: "radial-gradient(#14151A14 1px, transparent 1.3px)",
+          backgroundSize: "10px 10px",
+          borderBottom: "4px solid #14151A",
+        }}
+      >
+        <div className="max-w-5xl mx-auto">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="px-2 py-0.5 rounded" style={{ background: "#DC2626", transform: "rotate(-2deg)" }}>
+              <span className="text-white text-[11px] font-bold uppercase tracking-wider" style={{ fontFamily: "'Barlow Condensed', sans-serif" }}>
+                Field File
+              </span>
+            </div>
+          </div>
+          <h1 className="font-black uppercase leading-none" style={{ fontFamily: "'Bangers', cursive", fontSize: 44, color: "#14151A", letterSpacing: 1 }}>
+            The Connected Universe
+          </h1>
+          <p className="text-sm mt-1 max-w-xl" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#4B4B4B" }}>
+            A browsable dossier of characters — search the deck, or switch to the web view to trace a character's family, teammates, and rivals two degrees out.
+          </p>
+        </div>
+      </div>
+
+      <div className="max-w-5xl mx-auto px-4 py-4">
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between mb-4">
+          <div className="flex items-center gap-2 flex-1">
+            <div className="relative flex-1 max-w-xs">
+              <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2" style={{ color: "#6B6B6B" }} />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search name, power, team…"
+                className="w-full pl-8 pr-3 py-2 rounded-lg text-sm outline-none"
+                style={{ border: "2px solid #14151A", fontFamily: "'Barlow Condensed', sans-serif", background: "#FBF7EE" }}
+              />
+            </div>
+            <div className="flex gap-1 rounded-lg p-1" style={{ border: "2px solid #14151A", background: "#FBF7EE" }}>
+              <button
+                onClick={() => setView("cards")}
+                className="p-1.5 rounded"
+                style={{ background: view === "cards" ? "#14151A" : "transparent", color: view === "cards" ? "#FBF7EE" : "#14151A" }}
+                title="Card grid"
+              >
+                <LayoutGrid size={16} />
+              </button>
+              <button
+                onClick={() => setView("web")}
+                className="p-1.5 rounded"
+                style={{ background: view === "web" ? "#14151A" : "transparent", color: view === "web" ? "#FBF7EE" : "#14151A" }}
+                title="Relationship web"
+              >
+                <Network size={16} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              onClick={() => setTeamFilter(null)}
+              className="text-[11px] font-bold uppercase px-2.5 py-1 rounded-full"
+              style={{
+                fontFamily: "'Barlow Condensed', sans-serif",
+                border: "2px solid #14151A",
+                background: teamFilter === null ? "#14151A" : "#FBF7EE",
+                color: teamFilter === null ? "#FBF7EE" : "#14151A",
+              }}
+            >
+              All
+            </button>
+            {Object.entries(TEAMS).map(([name, t]) => (
+              <button
+                key={name}
+                onClick={() => setTeamFilter(teamFilter === name ? null : name)}
+                className="text-[11px] font-bold uppercase px-2.5 py-1 rounded-full"
+                style={{
+                  fontFamily: "'Barlow Condensed', sans-serif",
+                  border: "2px solid #14151A",
+                  background: teamFilter === name ? t.color : "#FBF7EE",
+                  color: teamFilter === name ? "#fff" : "#14151A",
+                }}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {view === "cards" ? (
+          <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))" }}>
+            {filtered.map((c) => (
+              <Card key={c.id} char={c} onSelect={setSelectedId} />
+            ))}
+            {filtered.length === 0 && (
+              <div className="col-span-full text-center py-10 text-sm" style={{ fontFamily: "'Barlow Condensed', sans-serif", color: "#6B6B6B" }}>
+                No one in the file matches that search.
+              </div>
+            )}
+          </div>
+        ) : (
+          <WebView
+            teamFilter={teamFilter}
+            focusId={focusId}
+            onFocus={setFocusId}
+            onOpenDetail={setSelectedId}
+            query={query}
+            searchMatches={searchMatches}
+          />
+        )}
+      </div>
+
+      <DetailPanel id={selectedId} onClose={() => setSelectedId(null)} onJump={setSelectedId} onViewWeb={viewInWeb} />
+    </div>
+  );
+}
+
+
+const rootEl = document.getElementById("root");
+ReactDOM.createRoot(rootEl).render(<MarvelDeck />);
+
+</script>
+
+<script>
+  const source = document.getElementById("app-source").textContent;
+  const { code } = Babel.transform(source, {
+    presets: [["react", { runtime: "classic" }]],
+  });
+  const script = document.createElement("script");
+  script.textContent = code;
+  document.body.appendChild(script);
+</script>
+</body>
+</html>
